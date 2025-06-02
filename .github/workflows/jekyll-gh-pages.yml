@@ -29,21 +29,17 @@ jobs:
           node-version: '20'
           
       - name: Install Dependencies
-        run: |
-          cd frontend_rotas_os
-          npm install
+        run: npm install
           
       - name: Build
-        run: |
-          cd frontend_rotas_os
-          npm run build
+        run: npm run build
         env:
           VITE_API_URL: 'https://backend-rotas-os.onrender.com'
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend_rotas_os/dist
+          path: dist
 
   deploy:
     environment:
