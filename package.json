@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
+    "@heroicons/react": "^2.2.0",
     "@mapbox/mapbox-gl-draw": "^1.4.3",
     "@turf/turf": "^6.5.0",
     "mapbox-gl": "^2.15.0",

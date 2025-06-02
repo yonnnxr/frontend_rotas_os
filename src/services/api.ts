@@ -1,4 +1,4 @@
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 export type Coordinates = [number, number]
 
@@ -51,9 +51,25 @@ export type GeoJSONResponse = {
   features: ServiceOrderFeature[]
 }
 
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+
+  return response.json()
+}
+
 export const auth = {
   signInWithTeamCode: async (code: string): Promise<Team> => {
-    const response = await fetch(`${apiUrl}/api/auth/team`, {
+    const response = await fetch(`${API_URL}/api/auth/team`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,19 +98,18 @@ export const auth = {
 }
 
 export const api = {
-  getTeams: async (): Promise<Team[]> => {
-    const response = await fetch(`${apiUrl}/api/teams`)
-    if (!response.ok) {
-      throw new Error('Erro ao carregar equipes')
-    }
-    return response.json()
+  post: <T>(endpoint: string, data: any): Promise<T> => {
+    return request<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
-  getTeamOrders: async (teamId: string): Promise<GeoJSONResponse> => {
-    const response = await fetch(`${apiUrl}/api/teams/${teamId}/geojson`)
-    if (!response.ok) {
-      throw new Error('Erro ao carregar ordens de serviço')
-    }
-    return response.json()
-  }
+  getTeams: (): Promise<Team[]> => {
+    return request<Team[]>('/api/teams')
+  },
+
+  getTeamOrders: (teamId: string): Promise<GeoJSONResponse> => {
+    return request<GeoJSONResponse>(`/api/teams/${teamId}/geojson`)
+  },
 } 

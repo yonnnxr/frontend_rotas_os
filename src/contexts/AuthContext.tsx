@@ -1,42 +1,45 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { auth, Team } from '@/services/supabase'
+import { createContext, useContext, useState, ReactNode } from 'react'
+import { api } from '@/services/api'
+
+interface Team {
+  id: string
+  name: string
+}
 
 interface AuthContextType {
   team: Team | null
   signIn: (code: string) => Promise<void>
   signOut: () => void
-  isLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [team, setTeam] = useState<Team | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    // Verifica se já existe uma equipe autenticada
-    const team = auth.getTeam()
-    setTeam(team)
-    setIsLoading(false)
-  }, [])
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [team, setTeam] = useState<Team | null>(() => {
+    const storedTeam = localStorage.getItem('@OtimizadorRotas:team')
+    return storedTeam ? JSON.parse(storedTeam) : null
+  })
 
   const signIn = async (code: string) => {
     try {
-      const team = await auth.signInWithTeamCode(code)
+      const response = await api.post('/auth/team', { code })
+      const team = response.data
+
+      localStorage.setItem('@OtimizadorRotas:team', JSON.stringify(team))
       setTeam(team)
     } catch (error) {
+      console.error('Erro ao autenticar:', error)
       throw error
     }
   }
 
   const signOut = () => {
-    auth.signOut()
+    localStorage.removeItem('@OtimizadorRotas:team')
     setTeam(null)
   }
 
   return (
-    <AuthContext.Provider value={{ team, signIn, signOut, isLoading }}>
+    <AuthContext.Provider value={{ team, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
@@ -45,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
 } 
