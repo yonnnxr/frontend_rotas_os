@@ -10,6 +10,7 @@ interface AuthContextType {
   team: Team | null
   signIn: (code: string) => Promise<void>
   signOut: () => void
+  isLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -19,17 +20,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedTeam = localStorage.getItem('@OtimizadorRotas:team')
     return storedTeam ? JSON.parse(storedTeam) : null
   })
+  const [isLoading, setIsLoading] = useState(false)
 
   const signIn = async (code: string) => {
     try {
-      const response = await api.post('/auth/team', { code })
-      const team = response.data
+      setIsLoading(true)
+      const response = await api.post<Team>('/auth/team', { code })
+      const team = response
 
       localStorage.setItem('@OtimizadorRotas:team', JSON.stringify(team))
       setTeam(team)
     } catch (error) {
       console.error('Erro ao autenticar:', error)
       throw error
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -39,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ team, signIn, signOut }}>
+    <AuthContext.Provider value={{ team, signIn, signOut, isLoading }}>
       {children}
     </AuthContext.Provider>
   )
