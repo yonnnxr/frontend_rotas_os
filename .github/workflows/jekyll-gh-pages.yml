@@ -39,6 +39,10 @@ jobs:
         env:
           VITE_API_URL: 'https://backend-rotas-os.onrender.com'
           
+      - name: Configure Custom Domain
+        run: |
+          echo "geodadosbr.com.br" > dist/CNAME
+          
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
