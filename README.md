@@ -1,122 +1,133 @@
-# Frontend - Sistema de Rotas OS
+# Otimizador de Rotas - Frontend
 
-## Visão Geral
-Interface web do sistema de Rotas OS, desenvolvida para proporcionar uma experiência de usuário intuitiva e responsiva.
+Frontend do sistema de otimização de rotas para ordens de serviço.
 
-## Tecnologias Utilizadas
-- React 18+
-- TypeScript 5.x
-- Vite 5.x
-- Tailwind CSS 3.x
-- React Query 5.x
-- React Router DOM 6.x
-- Vitest (Testes)
-- ESLint + Prettier
-- Axios (HTTP Client)
-- React Hook Form
-- Zod (Validação)
-- Leaflet (Mapas)
-- DayJS (Datas)
-- i18next (Internacionalização)
+## Tecnologias
 
-## Requisitos do Sistema
+- [Vite](https://vitejs.dev/) - Build tool e dev server
+- [React](https://react.dev/) - Biblioteca UI
+- [TypeScript](https://www.typescriptlang.org/) - Tipagem estática
+- [Tailwind CSS](https://tailwindcss.com/) - Framework CSS
+- [React Router](https://reactrouter.com/) - Roteamento
+- [Supabase](https://supabase.com/) - Backend as a Service
+- [Headless UI](https://headlessui.com/) - Componentes acessíveis
+- [Heroicons](https://heroicons.com/) - Ícones
+
+## Requisitos
+
 - Node.js 18+
-- NPM 8+
+- npm ou yarn
 
-## Configuração do Ambiente
+## Instalação
 
-### Instalação
+1. Clone o repositório:
 ```bash
-cd frontend_rotas_os
+git clone https://github.com/seu-usuario/otimizador-rotas.git
+cd otimizador-rotas/frontend_rotas_os
+```
+
+2. Instale as dependências:
+```bash
 npm install
+# ou
+yarn
 ```
 
-### Variáveis de Ambiente
-Crie um arquivo `.env` com as seguintes variáveis:
-```
-# API
-VITE_API_URL=http://localhost:3000
-VITE_APP_ENV=development
-
-# Mapas
-VITE_MAPBOX_TOKEN=seu_token_mapbox
-
-# Recursos
-VITE_ENABLE_PWA=true
-VITE_ENABLE_ANALYTICS=false
-
-# i18n
-VITE_DEFAULT_LANGUAGE=pt-BR
+3. Crie um arquivo `.env` na raiz do projeto e configure as variáveis de ambiente:
+```env
+VITE_SUPABASE_URL=sua_url_do_supabase
+VITE_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
 ```
 
-## Scripts Disponíveis
-- `npm run dev`: Inicia o servidor de desenvolvimento
-- `npm run build`: Compila o projeto para produção
-- `npm run preview`: Visualiza a build de produção localmente
-- `npm test`: Executa os testes unitários
-- `npm run test:e2e`: Executa os testes E2E com Cypress
-- `npm run lint`: Executa o ESLint
-- `npm run format`: Formata o código com Prettier
-- `npm run storybook`: Inicia o Storybook para desenvolvimento de componentes
-- `npm run build-storybook`: Compila a documentação do Storybook
-- `npm run analyze`: Analisa o tamanho do bundle
+## Desenvolvimento
+
+Para iniciar o servidor de desenvolvimento:
+
+```bash
+npm run dev
+# ou
+yarn dev
+```
+
+O servidor iniciará em `http://localhost:3000`.
+
+## Build
+
+Para gerar a build de produção:
+
+```bash
+npm run build
+# ou
+yarn build
+```
+
+## Autenticação
+
+O sistema utiliza um sistema de autenticação simplificado baseado em código de equipe. Cada equipe possui um código único que é usado para acessar o sistema.
+
+### Estrutura da Tabela de Equipes
+
+A tabela `teams` no Supabase deve ter a seguinte estrutura:
+
+```sql
+create table teams (
+  id uuid default uuid_generate_v4() primary key,
+  code text not null unique,
+  name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+```
+
+### Fluxo de Autenticação
+
+1. O usuário acessa a página de login
+2. Insere o código da equipe
+3. O sistema valida o código contra a tabela `teams`
+4. Se válido, armazena os dados da equipe no localStorage e redireciona para o dashboard
+5. Se inválido, exibe mensagem de erro
 
 ## Estrutura do Projeto
+
 ```
 frontend_rotas_os/
 ├── src/
-│   ├── assets/         # Arquivos estáticos
-│   ├── components/     # Componentes React
-│   │   ├── common/    # Componentes compartilhados
-│   │   ├── forms/     # Componentes de formulário
-│   │   ├── layout/    # Componentes de layout
-│   │   └── maps/      # Componentes de mapas
+│   ├── components/     # Componentes reutilizáveis
+│   ├── contexts/      # Contextos React (AuthContext)
+│   ├── layouts/        # Layouts da aplicação
 │   ├── pages/         # Páginas da aplicação
-│   ├── hooks/         # Hooks personalizados
-│   ├── services/      # Serviços e API
-│   ├── store/         # Gerenciamento de estado
-│   ├── utils/         # Utilitários
-│   ├── styles/        # Estilos e temas
+│   ├── services/      # Serviços e integrações
+│   ├── styles/        # Estilos globais
 │   ├── types/         # Tipos TypeScript
-│   ├── i18n/          # Traduções
-│   ├── routes/        # Configuração de rotas
-│   └── App.tsx        # Componente principal
+│   ├── utils/         # Funções utilitárias
+│   ├── App.tsx        # Componente principal
+│   └── main.tsx       # Ponto de entrada
 ├── public/            # Arquivos estáticos
-├── tests/            # Testes
-│   ├── unit/        # Testes unitários
-│   ├── integration/ # Testes de integração
-│   └── e2e/        # Testes end-to-end
-├── .storybook/      # Configuração do Storybook
-├── cypress/         # Testes E2E com Cypress
-├── .env.example     # Exemplo de variáveis de ambiente
-├── .eslintrc.js    # Configuração do ESLint
-├── .prettierrc     # Configuração do Prettier
+├── .env              # Variáveis de ambiente
+├── .eslintrc.cjs     # Configuração do ESLint
+├── .gitignore        # Arquivos ignorados pelo Git
+├── index.html        # HTML principal
+├── package.json      # Dependências e scripts
+├── postcss.config.js # Configuração do PostCSS
 ├── tailwind.config.js # Configuração do Tailwind
-├── tsconfig.json   # Configuração do TypeScript
-├── vite.config.ts  # Configuração do Vite
-├── README.md       # Esta documentação
-├── tarefas.md      # Lista de tarefas
-└── CHANGELOG.md    # Histórico de mudanças
+├── tsconfig.json     # Configuração do TypeScript
+└── vite.config.ts    # Configuração do Vite
+```
 
-## Padrões de Código
-- Utilizar TypeScript para todo o código
-- Componentes funcionais com hooks
-- Styled Components para estilos específicos
-- Tailwind para estilos utilitários
-- Testes para componentes principais
-- Documentação com Storybook
-- Lazy loading para rotas
-- Memoização quando necessário
+## Scripts
 
-## Convenções
-- Nomes de componentes em PascalCase
-- Nomes de hooks em camelCase começando com 'use'
-- Nomes de utilitários em camelCase
-- Testes com extensão .test.tsx ou .spec.tsx
-- Stories com extensão .stories.tsx
+- `dev`: Inicia o servidor de desenvolvimento
+- `build`: Gera a build de produção
+- `preview`: Visualiza a build de produção localmente
+- `lint`: Executa o linter no código
 
-## Documentação Adicional
-- [Guia de Estilo](/docs/style-guide.md)
-- [Guia de Contribuição](/docs/contributing.md)
-- [Documentação dos Componentes](https://storybook.rotas-os.com)
-- [Arquitetura](/docs/architecture.md) 
+## Contribuição
+
+1. Faça o fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
+3. Faça commit das suas alterações (`git commit -m 'feat: Adiciona nova feature'`)
+4. Faça push para a branch (`git push origin feature/nova-feature`)
+5. Abra um Pull Request
+
+## Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes. 
