@@ -25,15 +25,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
           
-      - name: Install Dependencies
+      - name: Clean Install
         run: |
-          npm ci
+          rm -rf node_modules
+          rm -f package-lock.json
+          npm install
           
       - name: Build
         run: |
-          npx tsc
-          npx vite build
+          npm run build
         env:
           VITE_API_URL: 'https://backend-rotas-os.onrender.com'
           
