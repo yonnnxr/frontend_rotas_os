@@ -1,7 +1,11 @@
 # Dependências
 node_modules/
-/.pnp
-.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
 # Produção
 /dist
