@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.VITE_BASE_PATH || '/',
+  base: '/frontend_rotas_os/',
   build: {
     outDir: 'dist',
     sourcemap: true,
@@ -12,7 +12,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'map-vendor': ['mapbox-gl', '@mapbox/mapbox-gl-draw'],
+          'map-vendor': ['leaflet', 'react-leaflet'],
         },
       },
     },
