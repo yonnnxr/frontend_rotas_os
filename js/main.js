@@ -49,9 +49,8 @@ function logout() {
 function initMap() {
     if (map) return;
     
-    // Coordenadas iniciais aproximadas para Mato Grosso do Sul (Anastácio)
-    // Será ajustado quando as ordens de serviço forem carregadas
-    map = L.map('map').setView([-20.475711354063041, -43.808074696354296], 10);
+    // Região de Anastácio, MS (onde as ordens realmente deveriam estar)
+    map = L.map('map').setView([-20.48, -55.80], 12);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -141,7 +140,7 @@ function displayOrders(geojsonData) {
     }
     
     // Para debug: exibe as coordenadas de todas as ordens
-    console.log('Coordenadas das ordens:');
+    console.log('Coordenadas originais das ordens:');
     geojsonData.features.forEach((feature, index) => {
         if (feature.geometry && feature.geometry.coordinates) {
             console.log(`OS #${index}: [${feature.geometry.coordinates}]`);
@@ -159,44 +158,25 @@ function displayOrders(geojsonData) {
                 return;
             }
             
-            // Verifica o tipo de coordenadas
+            // No GeoJSON, o formato é [longitude, latitude]
             const coords = feature.geometry.coordinates;
             
-            // Verifica se as coordenadas fazem sentido para Anastácio/MS
-            // Latitude de Anastácio: aproximadamente -20.48
-            // Longitude de Anastácio: aproximadamente -55.80
+            // Problema identificado: as coordenadas estão na região de BH (-43.8, -20.48)
+            // mas deveriam estar em Anastácio (-55.8, -20.48)
+            // A latitude está correta, mas a longitude está errada
             
-            // No GeoJSON, o formato é [longitude, latitude]
-            let lat, lng;
+            // Coordenadas originais
+            const origLng = coords[0];
+            const origLat = coords[1];
             
-            // Verifica se as coordenadas estão invertidas ou em região incorreta
-            // Se a primeira coordenada parece uma latitude no Brasil (-10 a -30)
-            // e a segunda parece uma longitude no Brasil (-35 a -75)
-            if (coords[0] >= -30 && coords[0] <= -10 && 
-                coords[1] >= -75 && coords[1] <= -35) {
-                // Coordenadas estão invertidas - corrige
-                console.log(`Coordenadas invertidas detectadas: [${coords}], corrigindo...`);
-                lat = coords[0];  // Primeira coordenada é latitude
-                lng = coords[1];  // Segunda coordenada é longitude
-            } else {
-                // Formato padrão GeoJSON [longitude, latitude]
-                lng = coords[0];
-                lat = coords[1];
-                
-                // Verifica se parece estar na região de Mato Grosso do Sul
-                const distanciaAnastacio = Math.sqrt(
-                    Math.pow(lat - (-20.48), 2) + 
-                    Math.pow(lng - (-55.80), 2)
-                );
-                
-                // Se estiver muito distante (>5 graus), pode estar incorreto
-                if (distanciaAnastacio > 5) {
-                    console.warn(
-                        `Coordenada suspeita: [${lng},${lat}], ` +
-                        `distância de Anastácio: ${distanciaAnastacio.toFixed(2)} graus`
-                    );
-                }
-            }
+            // Corrigir coordenadas:
+            // Abordagem 1: Deslocar a longitude
+            // De: região de BH (-43.8) Para: região de Anastácio (-55.8)
+            // Diferença aproximada: -12 graus
+            let lng = origLng - 12;  // Desloca 12 graus para oeste
+            let lat = origLat;       // Mantém a latitude
+            
+            console.log(`Corrigindo coordenadas: [${origLng}, ${origLat}] -> [${lng}, ${lat}]`);
             
             // Cria o ponto Leaflet e adiciona à lista de pontos
             const latlng = L.latLng(lat, lng);
@@ -243,7 +223,10 @@ function displayOrders(geojsonData) {
                 localidade = `<strong>Localidade:</strong> ${props.localidade || props.municipio}<br>`;
             }
             
-            let coordsInfo = `<strong>Coordenadas:</strong> [${lat.toFixed(6)}, ${lng.toFixed(6)}]<br>`;
+            let coordsInfo = `
+                <strong>Coordenadas originais:</strong> [${origLat.toFixed(6)}, ${origLng.toFixed(6)}]<br>
+                <strong>Coordenadas corrigidas:</strong> [${lat.toFixed(6)}, ${lng.toFixed(6)}]<br>
+            `;
             
             marker.bindPopup(`
                 <strong>OS:</strong> ${ordemServico}<br>
@@ -266,13 +249,13 @@ function displayOrders(geojsonData) {
     // Ajusta o zoom para mostrar todos os pontos
     if (points.length > 0) {
         try {
-            console.log('Ajustando visualização para os pontos...');
+            console.log('Ajustando visualização para os pontos corrigidos...');
             // Tenta usar os pontos coletados
             map.fitBounds(L.latLngBounds(points));
         } catch (error) {
             console.error('Erro ao ajustar bounds:', error);
             
-            // Fallback: foca em Anastácio
+            // Fallback: centro de Anastácio
             console.log('Usando centro de Anastácio como fallback');
             map.setView(anastacioCenter, 12);
         }
