@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://backend-rotas-os.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.seu-dominio.workers.dev/api';
 let map = null;
 let markersLayer = null;
 
@@ -8,8 +8,7 @@ async function login(teamCode) {
         const response = await fetch(`${API_URL}/validate-team`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ team_code: teamCode })
         });
@@ -19,27 +18,16 @@ async function login(teamCode) {
         }
 
         const data = await response.json();
-        // Armazena os dados da equipe e o token JWT
         localStorage.setItem('token', data.token);
         localStorage.setItem('team_code', teamCode);
-        localStorage.setItem('team_name', data.name);
-        localStorage.setItem('team_id', data.id);
         
-        // Atualiza a interface
         document.getElementById('login-container').classList.add('hidden');
         document.getElementById('map-container').classList.remove('hidden');
-        
-        // Atualiza a informação da equipe na interface
-        const teamInfoElement = document.getElementById('team-info');
-        if (teamInfoElement) {
-            teamInfoElement.textContent = `Equipe: ${data.name}`;
-        }
         
         initMap();
         loadOrders();
     } catch (error) {
-        console.error('Erro de login:', error);
-        alert(error.message || 'Erro ao fazer login. Tente novamente.');
+        alert(error.message);
     }
 }
 
@@ -47,8 +35,6 @@ async function login(teamCode) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('team_code');
-    localStorage.removeItem('team_name');
-    localStorage.removeItem('team_id');
     
     if (map) {
         map.remove();
@@ -63,9 +49,13 @@ function logout() {
 function initMap() {
     if (map) return;
     
-    map = L.map('map').setView([-23.550520, -46.633308], 12);
+    // Coordenadas iniciais aproximadas para Mato Grosso do Sul (Anastácio)
+    // Será ajustado quando as ordens de serviço forem carregadas
+    map = L.map('map').setView([-20.475711354063041, -43.808074696354296], 10);
+    
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
     }).addTo(map);
     
     markersLayer = L.layerGroup().addTo(map);
@@ -82,10 +72,10 @@ async function loadOrders() {
             return;
         }
 
-        // Usa a rota específica da equipe para garantir segurança
-        let url = `${API_URL}/api/teams/${teamId}/geojson`;
-
         console.log(`Carregando ordens da equipe ${teamId}...`);
+        
+        // Primeiro tenta carregar usando a API específica da equipe
+        let url = `${API_URL}/api/teams/${teamId}/geojson`;
         const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -100,7 +90,7 @@ async function loadOrders() {
                 return;
             }
             
-            // Se a rota específica falhar, tenta a rota alternativa (que também está protegida)
+            // Se a API específica falhar, tenta a rota genérica
             console.log('Tentando rota alternativa para ordens de serviço...');
             const fallbackResponse = await fetch(`${API_URL}/orders`, {
                 headers: {
@@ -119,6 +109,7 @@ async function loadOrders() {
         }
 
         const geojsonData = await response.json();
+        console.log('Dados carregados:', geojsonData);
         displayOrders(geojsonData);
     } catch (error) {
         console.error('Erro ao carregar ordens:', error);
@@ -149,14 +140,73 @@ function displayOrders(geojsonData) {
         orderCountElement.textContent = `${geojsonData.features.length} ordens de serviço`;
     }
     
-    // Adiciona os dados ao mapa
-    const geoJsonLayer = L.geoJSON(geojsonData, {
-        pointToLayer: (feature, latlng) => {
-            // Usa a propriedade situacao para determinar a cor (se disponível)
+    // Para debug: exibe as coordenadas de todas as ordens
+    console.log('Coordenadas das ordens:');
+    geojsonData.features.forEach((feature, index) => {
+        if (feature.geometry && feature.geometry.coordinates) {
+            console.log(`OS #${index}: [${feature.geometry.coordinates}]`);
+        }
+    });
+    
+    // Cria um grupo de coordenadas para calcular o centro
+    let points = [];
+    
+    // Adiciona os pontos ao mapa
+    geojsonData.features.forEach(feature => {
+        try {
+            if (!feature.geometry || !feature.geometry.coordinates) {
+                console.warn('Feature sem coordenadas:', feature);
+                return;
+            }
+            
+            // Verifica o tipo de coordenadas
+            const coords = feature.geometry.coordinates;
+            
+            // Verifica se as coordenadas fazem sentido para Anastácio/MS
+            // Latitude de Anastácio: aproximadamente -20.48
+            // Longitude de Anastácio: aproximadamente -55.80
+            
+            // No GeoJSON, o formato é [longitude, latitude]
+            let lat, lng;
+            
+            // Verifica se as coordenadas estão invertidas ou em região incorreta
+            // Se a primeira coordenada parece uma latitude no Brasil (-10 a -30)
+            // e a segunda parece uma longitude no Brasil (-35 a -75)
+            if (coords[0] >= -30 && coords[0] <= -10 && 
+                coords[1] >= -75 && coords[1] <= -35) {
+                // Coordenadas estão invertidas - corrige
+                console.log(`Coordenadas invertidas detectadas: [${coords}], corrigindo...`);
+                lat = coords[0];  // Primeira coordenada é latitude
+                lng = coords[1];  // Segunda coordenada é longitude
+            } else {
+                // Formato padrão GeoJSON [longitude, latitude]
+                lng = coords[0];
+                lat = coords[1];
+                
+                // Verifica se parece estar na região de Mato Grosso do Sul
+                const distanciaAnastacio = Math.sqrt(
+                    Math.pow(lat - (-20.48), 2) + 
+                    Math.pow(lng - (-55.80), 2)
+                );
+                
+                // Se estiver muito distante (>5 graus), pode estar incorreto
+                if (distanciaAnastacio > 5) {
+                    console.warn(
+                        `Coordenada suspeita: [${lng},${lat}], ` +
+                        `distância de Anastácio: ${distanciaAnastacio.toFixed(2)} graus`
+                    );
+                }
+            }
+            
+            // Cria o ponto Leaflet e adiciona à lista de pontos
+            const latlng = L.latLng(lat, lng);
+            points.push([lat, lng]);
+            
+            // Usa a propriedade situacao para determinar a cor
             let color = 'red';
             const situacao = feature.properties.situacao || 
-                             feature.properties.status || 
-                             'pendente';
+                            feature.properties.status || 
+                            'pendente';
             
             if (situacao.toLowerCase().includes('exec')) {
                 color = 'green';
@@ -164,43 +214,71 @@ function displayOrders(geojsonData) {
                 color = 'orange';
             }
             
-            return L.circleMarker(latlng, {
+            // Cria o marcador
+            const marker = L.circleMarker(latlng, {
                 radius: 8,
                 fillColor: color,
                 color: '#fff',
                 weight: 1,
                 opacity: 1,
                 fillOpacity: 0.8
-            });
-        },
-        onEachFeature: (feature, layer) => {
+            }).addTo(markersLayer);
+            
+            // Configura o popup com informações detalhadas
             const props = feature.properties;
-            // Adapta para diferentes formatos de dados
             const ordemServico = props.ordem_servico || props.nroos || 'N/A';
             const status = props.status || props.situacao || 'Pendente';
             const equipe = props.equipe || props.equipeexec || localStorage.getItem('team_name');
             
-            layer.bindPopup(`
+            // Adiciona informações extras que podem ser úteis
+            let endereco = '';
+            if (props.logradouro) {
+                endereco = `<strong>Endereço:</strong> ${props.logradouro}, ${props.num || 'S/N'}`;
+                if (props.bairro) endereco += `, ${props.bairro}`;
+                endereco += `<br>`;
+            }
+            
+            let localidade = '';
+            if (props.localidade || props.municipio) {
+                localidade = `<strong>Localidade:</strong> ${props.localidade || props.municipio}<br>`;
+            }
+            
+            let coordsInfo = `<strong>Coordenadas:</strong> [${lat.toFixed(6)}, ${lng.toFixed(6)}]<br>`;
+            
+            marker.bindPopup(`
                 <strong>OS:</strong> ${ordemServico}<br>
                 <strong>Status:</strong> ${status}<br>
-                <strong>Equipe:</strong> ${equipe}
+                <strong>Equipe:</strong> ${equipe}<br>
+                ${endereco}
+                ${localidade}
+                ${coordsInfo}
             `);
+        } catch (error) {
+            console.error('Erro ao adicionar ponto:', error);
         }
-    }).addTo(markersLayer);
+    });
+    
+    console.log(`Pontos adicionados: ${points.length}`);
+    
+    // Centro aproximado de Anastácio/MS
+    const anastacioCenter = [-20.48, -55.80];
     
     // Ajusta o zoom para mostrar todos os pontos
-    try {
-        const bounds = geoJsonLayer.getBounds();
-        if (bounds && bounds.isValid()) {
-            map.fitBounds(bounds);
-        } else {
-            // Se não conseguir obter bounds válidos, usa uma localização padrão
-            map.setView([-23.550520, -46.633308], 12);
+    if (points.length > 0) {
+        try {
+            console.log('Ajustando visualização para os pontos...');
+            // Tenta usar os pontos coletados
+            map.fitBounds(L.latLngBounds(points));
+        } catch (error) {
+            console.error('Erro ao ajustar bounds:', error);
+            
+            // Fallback: foca em Anastácio
+            console.log('Usando centro de Anastácio como fallback');
+            map.setView(anastacioCenter, 12);
         }
-    } catch (error) {
-        console.error('Erro ao ajustar o zoom do mapa:', error);
-        // Em caso de erro, usa uma localização padrão
-        map.setView([-23.550520, -46.633308], 12);
+    } else {
+        console.warn('Nenhum ponto válido para exibir, centralizando em Anastácio');
+        map.setView(anastacioCenter, 12);
     }
 }
 
