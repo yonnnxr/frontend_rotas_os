@@ -223,18 +223,22 @@ function displayOrders(geojsonData) {
                 localidade = `<strong>Localidade:</strong> ${props.localidade || props.municipio}<br>`;
             }
             
-            let coordsInfo = `
-                <strong>Coordenadas originais:</strong> [${origLat.toFixed(6)}, ${origLng.toFixed(6)}]<br>
-                <strong>Coordenadas corrigidas:</strong> [${lat.toFixed(6)}, ${lng.toFixed(6)}]<br>
-            `;
+            // Adiciona informações de grupo e serviço
+            let grupoServico = '';
+            if (props.descgrupo) {
+                grupoServico += `<strong>Grupo:</strong> ${props.descgrupo}<br>`;
+            }
+            if (props.descrservsolicitado) {
+                grupoServico += `<strong>Serviço Solicitado:</strong> ${props.descrservsolicitado}<br>`;
+            }
             
             marker.bindPopup(`
                 <strong>OS:</strong> ${ordemServico}<br>
                 <strong>Status:</strong> ${status}<br>
                 <strong>Equipe:</strong> ${equipe}<br>
+                ${grupoServico}
                 ${endereco}
                 ${localidade}
-                ${coordsInfo}
             `);
         } catch (error) {
             console.error('Erro ao adicionar ponto:', error);
