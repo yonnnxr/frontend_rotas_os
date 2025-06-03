@@ -567,11 +567,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   // Função para atualizar qual é a próxima OS
   const atualizarProximaOS = () => {
+    console.log("Atualizando próxima OS, ordens atendidas:", ordensAtendidas);
     const proxima = encontrarOSMaisProxima();
-    setOsProxima(proxima);
     
     if (proxima) {
-      // Destaca visualmente a próxima OS no mapa
+      console.log("Nova OS próxima encontrada:", proxima.id, proxima.description);
+      setOsProxima(proxima);
       destacarProximaOS(proxima);
       
       // Centraliza o mapa incluindo o usuário e a próxima OS
@@ -586,6 +587,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       // Todas as ordens foram atendidas
       alert('Parabéns! Você concluiu todas as ordens de serviço.');
       setModoNavegacao(false);
+      setOsProxima(null);
     }
   };
 
@@ -697,6 +699,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     // Adiciona a OS atual à lista de concluídas
     setOrdensAtendidas(prev => [...prev, id]);
     
+    // Força uma atualização imediata da próxima OS
+    setTimeout(() => {
+      if (userLocation) {
+        const proximaOS = encontrarOSMaisProxima();
+        if (proximaOS) {
+          setOsProxima(proximaOS);
+          destacarProximaOS(proximaOS);
+        }
+      }
+    }, 100);
+    
     // Mostra confirmação visual temporária
     if (map) {
       const confirmacaoDiv = document.createElement('div');
@@ -751,7 +764,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     };
   }, [osProxima, userLocation]);
 
-  // Efeito para localização continua durante navegação
+  // Efeito para monitorar a localização do usuário durante o modo de navegação
   useEffect(() => {
     if (!modoNavegacao) return;
     
@@ -767,9 +780,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             lng: longitude,
             accuracy
           });
-          
-          // Atualizar próxima OS baseada na nova localização
-          atualizarProximaOS();
         },
         (error) => {
           console.error('Erro ao monitorar localização:', error.message);
@@ -788,14 +798,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [modoNavegacao, todasOrdens, ordensAtendidas]);
+  }, [modoNavegacao]);
 
-  // Efeito para atualizar a próxima OS quando a lista de OS atendidas muda
+  // Efeito para atualizar a próxima OS quando a localização muda ou OS são concluídas
   useEffect(() => {
     if (modoNavegacao && userLocation) {
-      atualizarProximaOS();
+      const timer = setTimeout(() => {
+        atualizarProximaOS();
+      }, 200);
+      
+      return () => clearTimeout(timer);
     }
-  }, [modoNavegacao, ordensAtendidas, userLocation]);
+  }, [modoNavegacao, userLocation, ordensAtendidas.length]);
 
   return (
     <div className="h-screen flex flex-col">
