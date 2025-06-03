@@ -35,7 +35,6 @@ export interface OSPoint {
 // Interfaces para autenticação
 export interface LoginCredentials {
   team_code: string
-  password: string
 }
 
 export interface LoginResponse {

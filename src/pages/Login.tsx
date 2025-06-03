@@ -7,15 +7,14 @@ interface LoginProps {
 
 export default function Login({ onLogin }: LoginProps) {
   const [teamCode, setTeamCode] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!teamCode || !password) {
-      setError('Preencha todos os campos')
+    if (!teamCode) {
+      setError('Digite o código da equipe')
       return
     }
     
@@ -30,15 +29,14 @@ export default function Login({ onLogin }: LoginProps) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          team_code: teamCode,
-          password: password,
+          team_code: teamCode
         } as LoginCredentials)
       })
       
       if (!response.ok) {
         throw new Error(
           response.status === 401
-            ? 'Código da equipe ou senha incorretos'
+            ? 'Código da equipe inválido'
             : 'Erro ao fazer login'
         )
       }
@@ -111,27 +109,6 @@ export default function Login({ onLogin }: LoginProps) {
                   onChange={(e) => setTeamCode(e.target.value)}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="Digite o código da equipe"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Senha
-              </label>
-              <div className="mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Digite sua senha"
                 />
               </div>
             </div>
