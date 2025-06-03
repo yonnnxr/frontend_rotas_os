@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LoginCredentials, LoginResponse } from '../types'
+import { LoginResponse } from '../types'
 
 interface LoginProps {
   onLogin: () => void
