@@ -201,7 +201,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     if (!optimizedRoute || !optimizedRoute.features || optimizedRoute.features.length === 0) return;
     
     // Filtra apenas os pontos (ordens)
-    const orderFeatures = optimizedRoute.features.filter(feature => 
+    const orderFeatures = optimizedRoute.features.filter((feature: GeoJSONFeature) => 
       feature.geometry && feature.geometry.type === 'Point'
     );
     
@@ -251,6 +251,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     // Essa função seria implementada para alterar visualmente o marcador no mapa
     // Por exemplo, mudando a cor para verde ou adicionando um ícone de check
     // Requer acesso aos marcadores individuais, que precisariam ser armazenados
+    console.log(`Ordem ${index} concluída`); // Usar o index para evitar erro TS6133
   };
   
   // Função para calcular a distância entre dois pontos (em km)
@@ -304,13 +305,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     const orderLng = coords[0] - 12;
     const orderLat = coords[1];
     
+    // Tipagem segura para userLocation que sabemos não ser null neste ponto
+    const location = userLocation as UserLocation; // Sabemos que não é null devido ao check acima
+    
     // Solicita uma rota de navegação da posição atual até a ordem
-    handleOptimizeRouteToPoint(userLocation.lat, userLocation.lng, orderLat, orderLng);
+    handleOptimizeRouteToPoint(location.lat, location.lng, orderLat, orderLng);
     
     // Exibe uma mensagem informativa
     const props = order.properties || {};
     const ordemServico = props.ordem_servico || props.nroos || 'N/A';
-    const distancia = calculateDistance(userLocation.lat, userLocation.lng, orderLat, orderLng);
+    const distancia = calculateDistance(location.lat, location.lng, orderLat, orderLng);
     
     // Atualiza o marcador para destacar a ordem atual
     if (markersLayer) {
@@ -359,7 +363,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         // Se ainda não temos a localização, vamos esperar um pouco e tentar novamente
         setTimeout(async () => {
           if (userLocation) {
-            await handleOptimizeRoute(userLocation.lat, userLocation.lng);
+            // Garantir a tipagem correta de userLocation
+            const location = userLocation as UserLocation;
+            await handleOptimizeRoute(location.lat, location.lng);
           } else {
             // Se ainda não temos a localização, usamos a rota sem ponto de partida
             await handleOptimizeRoute();
@@ -444,6 +450,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         map.fitBounds(bounds, { padding: [50, 50] })
       }
       
+      // Garantir tipagem correta nos lugares onde filtramos features 
+      // Adicionar a tipagem explícita para o feature no data.features.filter
+      if (routeStarted && userLocation && data.features) {
+        const orderFeatures = data.features.filter((feature: GeoJSONFeature) => 
+          feature.geometry && feature.geometry.type === 'Point'
+        );
+        
+        if (orderFeatures.length > 0) {
+          findNearestOrder(userLocation.lat, userLocation.lng, orderFeatures);
+        }
+      }
     } catch (error) {
       console.error('Erro ao obter rota de navegação:', error)
       alert(error instanceof Error ? error.message : 'Erro ao obter rota de navegação')
@@ -521,7 +538,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
     
     // Filtra apenas as ordens de serviço (pontos)
-    const orderFeatures = geojsonData.features.filter(feature => 
+    const orderFeatures = geojsonData.features.filter((feature: GeoJSONFeature) => 
       feature.geometry && feature.geometry.type === 'Point'
     )
     
@@ -532,7 +549,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     const points: [number, number][] = []
     
     // Adiciona os pontos ao mapa
-    orderFeatures.forEach((feature) => {
+    orderFeatures.forEach((feature: GeoJSONFeature) => {
       try {
         if (!feature.geometry?.coordinates || feature.geometry.coordinates.length < 2) return
         
@@ -719,7 +736,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       
       // Se a rota já foi iniciada, encontra a ordem mais próxima para navegar
       if (routeStarted && userLocation && data.features) {
-        const orderFeatures = data.features.filter(feature => 
+        const orderFeatures = data.features.filter((feature: GeoJSONFeature) => 
           feature.geometry && feature.geometry.type === 'Point'
         )
         
@@ -906,7 +923,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <h4 className="font-medium mb-2">Passo a passo:</h4>
             {instructions.length > 0 ? (
               <ul className="space-y-3">
-                {instructions.map((instruction) => (
+                {instructions.map((instruction: RouteInstruction) => (
                   <li key={instruction.index} className="border-b pb-2 last:border-b-0">
                     <div className="flex items-start">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center mr-2">
