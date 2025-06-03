@@ -244,9 +244,30 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
     })
     
-    // Ajusta o zoom para mostrar todos os pontos
+    // Ajusta o zoom para mostrar todos os pontos - com proteção contra erros
     if (points.length > 0) {
-      map.fitBounds(L.latLngBounds(points))
+      try {
+        // Verificamos se o mapa está em um estado válido para ajustar o zoom
+        if (map && map.getContainer() && map.getContainer().clientWidth > 0) {
+          // Usa um setTimeout para garantir que o DOM foi atualizado
+          setTimeout(() => {
+            try {
+              if (map && map.getContainer()) {
+                const bounds = L.latLngBounds(points);
+                map.fitBounds(bounds, { 
+                  padding: [50, 50],
+                  maxZoom: 15,  // Limita o zoom máximo para evitar zoom excessivo
+                  animate: false // Desativa animação para reduzir chance de erros
+                });
+              }
+            } catch (e) {
+              console.warn('Erro ao ajustar zoom:', e);
+            }
+          }, 100);
+        }
+      } catch (e) {
+        console.warn('Erro ao preparar ajuste de zoom:', e);
+      }
     }
   }
   
@@ -256,55 +277,85 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     markersLayerInstance: L.LayerGroup, 
     routeLayerInstance: L.LayerGroup
   ) => {
-    setMap(mapInstance)
-    setMarkersLayer(markersLayerInstance)
-    setRouteLayer(routeLayerInstance)
+    // Verifica se o mapa está em um estado válido
+    if (!mapInstance || !mapInstance.getContainer()) {
+      console.error('Mapa não inicializado corretamente');
+      return;
+    }
+    
+    // Armazena as referências
+    setMap(mapInstance);
+    setMarkersLayer(markersLayerInstance);
+    setRouteLayer(routeLayerInstance);
     
     // Se já temos dados carregados, exibe-os agora que o mapa está pronto
     if (optimizedRoute && todasOrdens.length > 0) {
-      // Pequeno timeout para garantir que o mapa está completamente renderizado
+      // Usa um timeout maior para garantir que o DOM esteja completamente renderizado
       setTimeout(() => {
-        exibirOrdens(optimizedRoute)
-        const { distance, duration } = exibirRota(optimizedRoute, routeLayerInstance)
-        
-        setStats(prev => ({
-          ...prev,
-          routeDistance: distance,
-          routeDuration: duration
-        }))
-      }, 300)
+        try {
+          // Verifica novamente se o mapa ainda é válido
+          if (mapInstance && mapInstance.getContainer() && 
+              mapInstance.getContainer().clientWidth > 0) {
+            
+            // Exibe as ordens no mapa
+            exibirOrdens(optimizedRoute);
+            
+            // Exibe a rota, com verificação de segurança
+            const { distance, duration } = exibirRota(optimizedRoute, routeLayerInstance);
+            
+            // Atualiza as estatísticas
+            setStats(prev => ({
+              ...prev,
+              routeDistance: distance,
+              routeDuration: duration
+            }));
+          }
+        } catch (e) {
+          console.warn('Erro ao exibir dados após inicialização do mapa:', e);
+        }
+      }, 500); // Aumentamos o timeout para 500ms
     }
   }
   
   // Função para obter a localização atual do usuário
   const handleObterLocalizacao = () => {
-    setMostrarPopupLocalizacao(false)
-    setLoading(true)
+    setMostrarPopupLocalizacao(false);
+    setLoading(true);
     
     obterLocalizacaoUsuario(
       // Callback de sucesso
       (location) => {
-        setUserLocation(location)
+        setUserLocation(location);
         
-        // Centraliza o mapa na posição do usuário
+        // Centraliza o mapa na posição do usuário, com verificação de segurança
         if (map) {
-          map.setView([location.lat, location.lng], 15)
+          try {
+            setTimeout(() => {
+              if (map && map.getContainer()) {
+                map.setView([location.lat, location.lng], 15, {
+                  animate: false // Desativa animação para evitar erros
+                });
+              }
+            }, 100);
+          } catch (e) {
+            console.warn('Erro ao centralizar mapa:', e);
+          }
         }
         
-        setLoading(false)
+        setLoading(false);
         
         // Inicia o modo de navegação por proximidade automaticamente
-        iniciarNavegacaoProximidade()
+        iniciarNavegacaoProximidade();
       },
       // Callback de erro
       (errorMessage) => {
         mostrarNotificacao(
           `Não foi possível obter sua localização: ${errorMessage}. Você ainda pode usar o sistema, mas algumas funcionalidades serão limitadas.`,
           'info'
-        )
-        setLoading(false)
+        );
+        setLoading(false);
       }
-    )
+    );
   }
   
   // Função para continuar sem localização

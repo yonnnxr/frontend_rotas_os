@@ -29,27 +29,55 @@ const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    // Região de Anastácio, MS
-    const newMap = L.map(mapRef.current).setView([-20.48, -55.80], 12);
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(newMap);
-    
-    const newMarkersLayer = L.layerGroup().addTo(newMap);
-    const newRouteLayer = L.layerGroup().addTo(newMap);
-    
-    mapInstanceRef.current = newMap;
-    markersLayerRef.current = newMarkersLayer;
-    routeLayerRef.current = newRouteLayer;
-    
-    // Notifica o componente pai que o mapa está pronto
-    onMapReady(newMap, newMarkersLayer, newRouteLayer);
+    try {
+      // Aguarda um momento para garantir que o contêiner está totalmente renderizado
+      setTimeout(() => {
+        if (!mapRef.current || mapInstanceRef.current) return;
+        
+        // Região de Anastácio, MS
+        const newMap = L.map(mapRef.current, {
+          // Opções para reduzir erros
+          fadeAnimation: false,
+          zoomAnimation: false,
+          markerZoomAnimation: false,
+          inertia: false
+        }).setView([-20.48, -55.80], 12);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(newMap);
+        
+        const newMarkersLayer = L.layerGroup().addTo(newMap);
+        const newRouteLayer = L.layerGroup().addTo(newMap);
+        
+        mapInstanceRef.current = newMap;
+        markersLayerRef.current = newMarkersLayer;
+        routeLayerRef.current = newRouteLayer;
+        
+        // Dá mais tempo para o mapa renderizar completamente antes de notificar
+        setTimeout(() => {
+          if (newMap && newMap.getContainer() && newMap.getContainer().clientWidth > 0) {
+            // Notifica o componente pai que o mapa está pronto
+            onMapReady(newMap, newMarkersLayer, newRouteLayer);
+          } else {
+            console.error('Mapa não inicializou corretamente');
+          }
+        }, 300);
+      }, 100);
+    } catch (err) {
+      console.error('Erro ao inicializar mapa:', err);
+    }
     
     // Cleanup na desmontagem
     return () => {
-      newMap.remove();
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (err) {
+          console.warn('Erro ao remover mapa:', err);
+        }
+      }
       mapInstanceRef.current = null;
       markersLayerRef.current = null;
       routeLayerRef.current = null;
