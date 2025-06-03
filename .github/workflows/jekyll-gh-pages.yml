@@ -33,6 +33,10 @@ jobs:
           rm -f package-lock.json
           npm install
           
+      - name: Create env file
+        run: |
+          echo "VITE_API_URL=https://backend-rotas-os.onrender.com" > .env.production
+          
       - name: Build
         run: |
           npm run build

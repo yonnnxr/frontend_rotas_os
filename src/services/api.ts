@@ -52,39 +52,56 @@ export type GeoJSONResponse = {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options.headers,
+      },
+      credentials: 'include',
+      mode: 'cors',
+    })
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  } catch (error) {
+    console.error('API Request Error:', error)
+    throw error
   }
-
-  return response.json()
 }
 
 export const auth = {
   signInWithTeamCode: async (code: string): Promise<Team> => {
-    const response = await fetch(`${API_URL}/api/auth/team`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    })
+    try {
+      const response = await fetch(`${API_URL}/validate-team`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'include',
+        body: JSON.stringify({ team_code: code }),
+      })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Erro ao autenticar equipe')
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.error || 'Erro ao autenticar equipe')
+      }
+
+      const data = await response.json()
+      localStorage.setItem('team', JSON.stringify(data))
+      return data
+    } catch (error) {
+      console.error('Login Error:', error)
+      throw error
     }
-
-    const data = await response.json()
-    localStorage.setItem('team', JSON.stringify(data))
-    return data
   },
 
   signOut: () => {
