@@ -5,6 +5,47 @@ Todas as alterações notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] - 2024-06-25
+
+### Adicionado
+- Popups aprimorados com informações detalhadas da ordem de serviço
+- Exibição de informações de grupo de serviço nos popups
+- Exibição da descrição do serviço solicitado nos popups
+
+### Corrigido
+- Problema de coordenadas incorretas que exibiam ordens em Belo Horizonte em vez de Anastácio/MS
+- Ajuste de longitude com deslocamento de 12 graus para posicionamento correto
+- Melhor tratamento de erros ao carregar ordens de serviço
+
+### Modificado
+- Melhorias na interface de usuário para visualização mais clara das ordens
+- Otimização do código de carregamento de ordens de serviço
+- Refinamento da lógica de ajuste de visualização do mapa
+
+## [0.5.0] - 2024-06-10
+
+### Adicionado
+- Configuração de GitHub Actions para deploy automático
+- Integração com o backend para carregamento de ordens
+- Visualização das ordens específicas da equipe logada
+- Diferenciação visual por status da ordem (cores diferentes)
+
+### Modificado
+- Fluxo de autenticação para usar token JWT do backend
+- Interface do mapa para melhor experiência do usuário
+
+## [0.4.0] - 2024-05-25
+
+### Adicionado
+- Implementação do mapa com Leaflet
+- Marcadores para ordens de serviço
+- Popups básicos com informações das ordens
+- Ajuste automático do zoom para visualizar todas as ordens
+
+### Modificado
+- Layout da aplicação para dar destaque ao mapa
+- Transição entre telas de login e visualização principal
+
 ## [0.3.0] - 2024-03-14
 
 ### Adicionado
