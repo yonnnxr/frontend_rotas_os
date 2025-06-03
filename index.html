@@ -1,64 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sistema de Ordens de Serviço</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <link rel="stylesheet" href="/css/style.css">
-</head>
-<body>
-    <div id="login-container" class="container">
-        <h1>Login da Equipe</h1>
-        <form id="login-form">
-            <input type="text" id="team-code" placeholder="Código da Equipe" required>
-            <button type="submit">Entrar</button>
-        </form>
-    </div>
-
-    <div id="map-container" class="container hidden">
-        <div id="header">
-            <h2>Ordens de Serviço</h2>
-            <div id="controls">
-                <button id="optimize-route-btn" class="action-btn"><i class="fas fa-route"></i> Otimizar Rota</button>
-                <button id="show-instructions-btn" class="action-btn hidden"><i class="fas fa-directions"></i> Instruções</button>
-                <button id="clear-route-btn" class="action-btn hidden"><i class="fas fa-times"></i> Limpar Rota</button>
-                <button id="logout-btn" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Sair</button>
-            </div>
-        </div>
-        <div id="info-panel">
-            <span id="order-count">Carregando ordens...</span>
-            <span id="route-info" class="hidden">Rota: <span id="route-distance">0</span> km (<span id="route-duration">0</span> min)</span>
-        </div>
-        <div id="map-content">
-            <div id="map"></div>
-            <div id="route-panel">
-                <div id="route-panel-header">
-                    <h3>Instruções de Rota</h3>
-                    <button id="route-panel-close">&times;</button>
-                </div>
-                <div id="route-panel-content">
-                    <div id="route-summary">
-                        <p><strong>Distância total:</strong> <span id="summary-distance">0</span> km</p>
-                        <p><strong>Duração estimada:</strong> <span id="summary-duration">0</span> min</p>
-                        <p><strong>Ordens de serviço:</strong> <span id="summary-orders">0</span></p>
-                    </div>
-                    <h4 class="mt-3">Passo a passo:</h4>
-                    <ul id="instructions-list" class="instructions-list">
-                        <li class="instruction-item">
-                            <span class="instruction-number">1</span>
-                            <div>
-                                <div class="instruction-text">Carregando instruções...</div>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
+  </head>
+  <body>
+    <div id="root"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script type="module" src="/js/main.js"></script>
-</body>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html> 

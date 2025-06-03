@@ -2,13 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-  }
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
 
-  body {
-    @apply bg-background text-foreground antialiased;
-  }
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f2f5;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 18px;
+  color: #4b5563;
+}
+
+/* Correção para ícones do Leaflet */
+.leaflet-default-icon-path {
+  background-image: url(https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png);
+}
+
+.leaflet-default-shadow-path {
+  background-image: url(https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png);
+}
+
+/* Estilo para o número de ordem */
+.order-number-icon {
+  background: none;
+  border: none;
+}
+
+.order-number-icon div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border: 2px solid #1a73e8;
+  border-radius: 50%;
+  color: #1a73e8;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+/* Variáveis de tema */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
 } 
