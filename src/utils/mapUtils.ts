@@ -26,55 +26,95 @@ export const criarMarcadorUsuario = (lat: number, lng: number): L.Marker => {
 
 // Função para exibir a rota visualmente (apenas visualização, sem navegação interna)
 export const exibirRota = (geojsonData: GeoJSONData, routeLayer: L.LayerGroup | null): { distance: number, duration: number } => {
-  // Verifica se o routeLayer existe antes de limpar
-  if (routeLayer) {
-    routeLayer.clearLayers();
-  } else {
+  // Valores padrão para retorno em caso de erro
+  let totalDistance = 0;
+  let totalDuration = 0;
+  
+  // Verificação mais robusta para validar os parâmetros de entrada
+  if (!geojsonData || !geojsonData.features || !Array.isArray(geojsonData.features)) {
+    console.warn("Dados GeoJSON inválidos ou ausentes");
+    return { distance: 0, duration: 0 };
+  }
+  
+  // Verifica se o routeLayer existe e está pronto para uso
+  if (!routeLayer) {
     console.warn("routeLayer é null, não é possível exibir a rota");
     return { distance: 0, duration: 0 };
   }
   
-  // Valores padrão
-  let totalDistance = 0;
-  let totalDuration = 0;
-  
-  // Verifica se há uma rota para exibir
-  const routeFeatures = geojsonData.features.filter(feature => 
-    feature.geometry.type === 'LineString' || 
-    feature.properties?.type === 'route' || 
-    feature.properties?.type === 'traffic_route'
-  );
-  
-  if (routeFeatures.length === 0) {
+  try {
+    // Verifica se o clearLayers existe antes de chamá-lo
+    if (typeof routeLayer.clearLayers === 'function') {
+      routeLayer.clearLayers();
+    } else {
+      console.warn("routeLayer.clearLayers não é uma função");
+      return { distance: 0, duration: 0 };
+    }
+    
+    // Verifica se há uma rota para exibir com validação de propriedades
+    const routeFeatures = geojsonData.features.filter(feature => 
+      feature && 
+      feature.geometry && 
+      (feature.geometry.type === 'LineString' || 
+      (feature.properties && 
+        (feature.properties.type === 'route' || 
+         feature.properties.type === 'traffic_route')))
+    );
+    
+    if (routeFeatures.length === 0) {
+      console.log("Nenhuma rota encontrada nos dados GeoJSON");
+      return { distance: 0, duration: 0 };
+    }
+    
+    // Adiciona cada rota ao mapa com tratamento de erros mais robusto
+    routeFeatures.forEach(feature => {
+      try {
+        if (!feature || !feature.geometry) {
+          console.warn("Feature inválido, pulando...");
+          return;
+        }
+        
+        const props = feature.properties || {};
+        const color = props.color || '#0066CC';
+        const weight = props.weight || 4;
+        const opacity = props.opacity || 0.7;
+        
+        // Verifica se o L.geoJSON pode ser criado e adicionado
+        const geoJsonLayer = L.geoJSON(feature as any, {
+          style: {
+            color,
+            weight,
+            opacity
+          }
+        });
+        
+        // Verifica se o layer foi criado corretamente
+        if (geoJsonLayer) {
+          geoJsonLayer.addTo(routeLayer);
+          
+          // Atualiza as estatísticas com verificações para evitar NaN
+          if (props.distance && !isNaN(props.distance)) {
+            totalDistance += props.distance;
+          }
+          
+          if (props.duration && !isNaN(props.duration)) {
+            totalDuration += props.duration;
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao exibir rota:', error);
+        // Continua com o próximo feature, não interrompe o loop
+      }
+    });
+    
+    return { 
+      distance: isNaN(totalDistance) ? 0 : totalDistance, 
+      duration: isNaN(totalDuration) ? 0 : totalDuration 
+    };
+  } catch (error) {
+    console.error('Erro fatal ao exibir rota:', error);
     return { distance: 0, duration: 0 };
   }
-  
-  // Adiciona cada rota ao mapa
-  routeFeatures.forEach(feature => {
-    try {
-      const props = feature.properties || {};
-      const color = props.color || '#0066CC';
-      const weight = props.weight || 4;
-      const opacity = props.opacity || 0.7;
-      
-      // Cria a linha da rota
-      L.geoJSON(feature as any, {
-        style: {
-          color,
-          weight,
-          opacity
-        }
-      }).addTo(routeLayer);
-      
-      // Atualiza as estatísticas
-      if (props.distance) totalDistance += props.distance;
-      if (props.duration) totalDuration += props.duration;
-    } catch (error) {
-      console.error('Erro ao exibir rota:', error);
-    }
-  });
-  
-  return { distance: totalDistance, duration: totalDuration };
 };
 
 // Mostrar notificação temporária na tela

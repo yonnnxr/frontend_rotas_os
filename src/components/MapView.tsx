@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { OSPoint, UserLocation } from '../types';
@@ -25,233 +25,241 @@ const MapView: React.FC<MapViewProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   
-  // Inicializa o mapa com uma abordagem mais robusta
+  // Flag para evitar operações em um mapa que está sendo desmontado
+  const [isMapMounted, setIsMapMounted] = useState(false);
+  const isMountedRef = useRef(true);
+  
+  // Inicializa o mapa apenas uma vez e mantém referência
   useEffect(() => {
+    // Definimos este ref para controlar o ciclo de vida do componente
+    isMountedRef.current = true;
+    
+    // Se o mapa já existe ou não temos elemento para anexá-lo, saímos
     if (!mapRef.current || mapInstanceRef.current) return;
     
-    // Removemos os timeouts aninhados e simplificamos a inicialização
-    // Primeiro definimos uma flag para controlar a inicialização
-    let isMapInitialized = false;
+    // Garantimos que o contêiner tem dimensões definidas
+    if (mapRef.current) {
+      mapRef.current.style.width = '100%';
+      mapRef.current.style.height = '100%';
+    }
+    
+    console.log('Iniciando criação do mapa...');
     
     try {
-      // Definir tamanho explícito para o contêiner para garantir que o Leaflet tenha
-      // dimensões definidas para trabalhar - isso pode prevenir muitos erros de posicionamento
-      if (mapRef.current) {
-        mapRef.current.style.width = '100%';
-        mapRef.current.style.height = '100%';
-      }
-      
-      // Inicializamos o mapa com opções mais seguras
-      const mapOptions: L.MapOptions = {
-        // Desabilitamos todas as animações e recursos que podem causar problemas
+      // Criamos o mapa com opções mínimas e sem animações
+      const newMap = L.map(mapRef.current, {
         fadeAnimation: false,
         zoomAnimation: false,
         markerZoomAnimation: false,
         inertia: false,
-        doubleClickZoom: false, // Desabilita zoom com duplo clique
-        attributionControl: false, // Simplifica removendo o controle de atribuição
-        zoomControl: false, // Adicionaremos controles manualmente depois
-        preferCanvas: true, // Usar Canvas em vez de SVG pode ser mais estável
-      };
+        preferCanvas: true,
+      });
       
-      // Inicializar o mapa
-      const newMap = L.map(mapRef.current, mapOptions);
-      
-      // Definir view inicial sem animação
+      // Definimos a view inicial sem animação
       newMap.setView([-20.48, -55.80], 12, { animate: false });
       
-      // Adicionar a camada base de forma simples
+      // Adicionamos apenas o layer de base
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
       }).addTo(newMap);
       
-      // Adicionar camadas
+      // Criamos as camadas de marcadores e rotas
       const newMarkersLayer = L.layerGroup().addTo(newMap);
       const newRouteLayer = L.layerGroup().addTo(newMap);
       
-      // Apenas quando todas as camadas estiverem carregadas, consideramos o mapa pronto
-      newMap.whenReady(() => {
+      // Armazenamos referências
+      mapInstanceRef.current = newMap;
+      markersLayerRef.current = newMarkersLayer;
+      routeLayerRef.current = newRouteLayer;
+      
+      // Usamos uma variável auxiliar para monitorar quando o mapa estiver pronto
+      let mapReadyHandled = false;
+      
+      // Função para notificar que o mapa está pronto
+      const notifyMapReady = () => {
+        // Evitamos notificar múltiplas vezes
+        if (mapReadyHandled || !isMountedRef.current) return;
+        
         console.log('Mapa realmente pronto!');
+        mapReadyHandled = true;
+        setIsMapMounted(true);
         
-        // Armazenar referências
-        mapInstanceRef.current = newMap;
-        markersLayerRef.current = newMarkersLayer;
-        routeLayerRef.current = newRouteLayer;
-        
-        // Agora adicionamos os controles que são menos críticos
-        L.control.zoom({
-          position: 'bottomright'
-        }).addTo(newMap);
-        
-        L.control.attribution({
-          position: 'bottomleft',
-          prefix: '© OpenStreetMap'
-        }).addTo(newMap);
-        
-        // Definir a flag para evitar inicialização duplicada
-        isMapInitialized = true;
-        
-        // Notificar o componente pai que o mapa está pronto
-        onMapReady(newMap, newMarkersLayer, newRouteLayer);
+        if (newMap && newMarkersLayer && newRouteLayer && isMountedRef.current) {
+          // Notificamos o componente pai
+          onMapReady(newMap, newMarkersLayer, newRouteLayer);
+        }
+      };
+      
+      // Usamos timeout para garantir que o DOM esteja completamente renderizado
+      const readyTimer = setTimeout(() => {
+        if (isMountedRef.current) {
+          notifyMapReady();
+        }
+      }, 500);
+      
+      // Também usamos o evento whenReady como backup
+      newMap.whenReady(() => {
+        if (isMountedRef.current) {
+          notifyMapReady();
+        }
       });
       
-      // Adicionar um listener extra para garantir que detectamos quando o mapa está realmente pronto
-      newMap.on('load', () => {
-        if (!isMapInitialized && mapInstanceRef.current === null) {
-          console.log('Mapa carregado via evento load');
-          mapInstanceRef.current = newMap;
-          markersLayerRef.current = newMarkersLayer;
-          routeLayerRef.current = newRouteLayer;
-          onMapReady(newMap, newMarkersLayer, newRouteLayer);
-          isMapInitialized = true;
-        }
-      });
-    } catch (err) {
-      console.error('Erro fatal ao inicializar mapa:', err);
-    }
-    
-    // Cleanup na desmontagem
-    return () => {
-      try {
+      // Limpeza
+      return () => {
+        // Definimos que o componente não está mais montado
+        isMountedRef.current = false;
+        setIsMapMounted(false);
+        
+        // Limpamos o timer
+        clearTimeout(readyTimer);
+        
+        console.log('Limpando recursos do mapa...');
+        
+        // Removemos o mapa se ele existir
         if (mapInstanceRef.current) {
-          console.log('Removendo mapa na desmontagem do componente');
-          mapInstanceRef.current.remove();
+          try {
+            mapInstanceRef.current.remove();
+            console.log('Mapa removido com sucesso');
+          } catch (err) {
+            console.warn('Erro ao remover mapa:', err);
+          }
         }
-      } catch (err) {
-        console.warn('Erro ao remover mapa:', err);
-      } finally {
+        
+        // Limpamos as referências
         mapInstanceRef.current = null;
         markersLayerRef.current = null;
         routeLayerRef.current = null;
-      }
-    };
-  }, [onMapReady]);
+        mapReadyHandled = false;
+      };
+    } catch (err) {
+      console.error('Erro fatal ao inicializar mapa:', err);
+    }
+  }, []); // Dependências vazias para executar apenas uma vez
   
   // Atualiza o marcador de localização do usuário
   useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current || !userLocation) return;
+    // Se o mapa não está montado ou não temos localização, saímos
+    if (!isMapMounted || !mapInstanceRef.current || !markersLayerRef.current || !userLocation || !isMountedRef.current) return;
     
     const markersLayer = markersLayerRef.current;
     
-    // Remove marcadores antigos de localização do usuário
-    markersLayer.eachLayer(layer => {
-      if ((layer as any)._icon?.classList.contains('user-location-icon')) {
-        markersLayer.removeLayer(layer);
-      }
-    });
-    
-    // Adiciona um novo marcador para a localização do usuário
-    const userIcon = L.divIcon({
-      className: 'user-location-icon',
-      html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-    
-    const { lat, lng } = userLocation;
-    
-    // Adiciona o novo marcador
-    const newMarker = L.marker([lat, lng], { icon: userIcon }).addTo(markersLayer);
-    newMarker.bindPopup('Sua localização atual');
-    
-  }, [userLocation]);
+    // Remove marcadores antigos de localização do usuário com segurança
+    try {
+      markersLayer.eachLayer(layer => {
+        if ((layer as any)._icon?.classList.contains('user-location-icon')) {
+          markersLayer.removeLayer(layer);
+        }
+      });
+      
+      // Adiciona um novo marcador para a localização do usuário
+      const userIcon = L.divIcon({
+        className: 'user-location-icon',
+        html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      
+      const { lat, lng } = userLocation;
+      
+      // Adiciona o novo marcador
+      const newMarker = L.marker([lat, lng], { icon: userIcon }).addTo(markersLayer);
+      newMarker.bindPopup('Sua localização atual');
+    } catch (err) {
+      console.warn('Erro ao atualizar marcador de usuário:', err);
+    }
+  }, [userLocation, isMapMounted]);
   
   // Destaca a OS mais próxima quando ela muda
   useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current) return;
+    // Se o mapa não está montado ou não temos a próxima OS, saímos
+    if (!isMapMounted || !mapInstanceRef.current || !markersLayerRef.current || !isMountedRef.current) return;
     
     const markersLayer = markersLayerRef.current;
     
-    // Remove qualquer destaque anterior de próxima OS
-    markersLayer.eachLayer(layer => {
-      if ((layer as any)._icon?.classList.contains('os-proxima-icon')) {
-        markersLayer.removeLayer(layer);
-      }
-    });
-    
-    // Se não tiver uma próxima OS, apenas retorna
-    if (!osProxima) return;
-    
-    // Adiciona um marcador destacado para a próxima OS
-    const proximaIcon = L.divIcon({
-      className: 'os-proxima-icon',
-      html: `<div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background-color:#FF3B30;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);color:white;font-weight:bold;">
-               <span style="font-size:18px;">→</span>
-             </div>`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18]
-    });
-    
-    const marker = L.marker([osProxima.lat, osProxima.lng], { 
-      icon: proximaIcon, 
-      zIndexOffset: 1000 
-    }).addTo(markersLayer);
-    
-    // Cria o conteúdo do popup
-    const distanciaTexto = osProxima.distanceFromUser 
-      ? `Distância: ${osProxima.distanceFromUser.toFixed(2)} km`
-      : '';
-    
-    const popupContent = `
-      <div style="text-align:center;">
-        <h3 style="margin:0 0 8px;font-size:16px;color:#FF3B30;">Próxima OS</h3>
-        <p style="margin:0 0 8px;font-weight:bold;">${osProxima.description}</p>
-        ${distanciaTexto ? `<p style="margin:0 0 12px;">${distanciaTexto}</p>` : ''}
-        <button
-          onclick="window.dispatchEvent(new CustomEvent('navegar-para-os', {detail: {id: '${osProxima.id}'}}));"
-          style="background-color:#007AFF;color:white;border:none;border-radius:4px;padding:10px;margin-bottom:10px;cursor:pointer;width:100%;font-size:16px;"
-        >
-          Navegar até aqui
-        </button>
-        <button
-          onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${osProxima.id}'}}));"
-          style="background-color:#34C759;color:white;border:none;border-radius:4px;padding:10px;cursor:pointer;width:100%;font-size:16px;"
-        >
-          Marcar como concluída
-        </button>
-      </div>
-    `;
-    
-    marker.bindPopup(popupContent, {
-      closeButton: false,
-      autoClose: false,
-      closeOnClick: false,
-      className: 'os-popup-mobile',
-      maxWidth: 280
-    }).openPopup();
-    
-    // Se tivermos localização do usuário, mostra uma visualização que inclua ambos
-    if (userLocation && mapInstanceRef.current) {
-      try {
-        // Verifica se o mapa está realmente pronto
-        const leafletMap = mapInstanceRef.current as any;
-        if (leafletMap && leafletMap._loaded) {
-          // Em vez de usar fitBounds, calculamos o centro entre o usuário e a OS
+    try {
+      // Remove qualquer destaque anterior de próxima OS
+      markersLayer.eachLayer(layer => {
+        if ((layer as any)._icon?.classList.contains('os-proxima-icon')) {
+          markersLayer.removeLayer(layer);
+        }
+      });
+      
+      // Se não tiver uma próxima OS, apenas retorna
+      if (!osProxima) return;
+      
+      // Adiciona um marcador destacado para a próxima OS
+      const proximaIcon = L.divIcon({
+        className: 'os-proxima-icon',
+        html: `<div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background-color:#FF3B30;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);color:white;font-weight:bold;">
+                 <span style="font-size:18px;">→</span>
+               </div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      });
+      
+      const marker = L.marker([osProxima.lat, osProxima.lng], { 
+        icon: proximaIcon, 
+        zIndexOffset: 1000 
+      }).addTo(markersLayer);
+      
+      // Cria o conteúdo do popup
+      const distanciaTexto = osProxima.distanceFromUser 
+        ? `Distância: ${osProxima.distanceFromUser.toFixed(2)} km`
+        : '';
+      
+      const popupContent = `
+        <div style="text-align:center;">
+          <h3 style="margin:0 0 8px;font-size:16px;color:#FF3B30;">Próxima OS</h3>
+          <p style="margin:0 0 8px;font-weight:bold;">${osProxima.description}</p>
+          ${distanciaTexto ? `<p style="margin:0 0 12px;">${distanciaTexto}</p>` : ''}
+          <button
+            onclick="window.dispatchEvent(new CustomEvent('navegar-para-os', {detail: {id: '${osProxima.id}'}}));"
+            style="background-color:#007AFF;color:white;border:none;border-radius:4px;padding:10px;margin-bottom:10px;cursor:pointer;width:100%;font-size:16px;"
+          >
+            Navegar até aqui
+          </button>
+          <button
+            onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${osProxima.id}'}}));"
+            style="background-color:#34C759;color:white;border:none;border-radius:4px;padding:10px;cursor:pointer;width:100%;font-size:16px;"
+          >
+            Marcar como concluída
+          </button>
+        </div>
+      `;
+      
+      marker.bindPopup(popupContent, {
+        closeButton: false,
+        autoClose: false,
+        closeOnClick: false,
+        className: 'os-popup-mobile',
+        maxWidth: 280
+      }).openPopup();
+      
+      // Se tivermos localização do usuário, vamos ajustar a visualização
+      if (userLocation && mapInstanceRef.current && isMountedRef.current) {
+        // Para segurança, não tentamos fazer nada de complicado aqui
+        // Apenas definimos o zoom e a posição diretamente sem animação
+        try {
+          // Calculamos o centro
           const centerLat = (userLocation.lat + osProxima.lat) / 2;
           const centerLng = (userLocation.lng + osProxima.lng) / 2;
           
-          // Calcula a distância aproximada para determinar o zoom
-          const deltaLat = Math.abs(userLocation.lat - osProxima.lat);
-          const deltaLng = Math.abs(userLocation.lng - osProxima.lng);
-          const maxDelta = Math.max(deltaLat, deltaLng) * 1.5; // Adiciona margem
+          // Definimos um zoom fixo que funciona bem na maioria dos casos
+          const zoomLevel = 13;
           
-          // Determina um nível de zoom apropriado
-          let zoomLevel = 15; // Zoom padrão
-          if (maxDelta > 0.1) zoomLevel = 11;
-          else if (maxDelta > 0.05) zoomLevel = 12;
-          else if (maxDelta > 0.02) zoomLevel = 13;
-          else if (maxDelta > 0.01) zoomLevel = 14;
-          
-          // Usar abordagem mais segura: primeiro definir zoom, depois posição
-          mapInstanceRef.current.setZoom(zoomLevel, { animate: false });
-          mapInstanceRef.current.panTo([centerLat, centerLng], { animate: false });
+          // Apenas mudamos o centro do mapa, sem animação
+          mapInstanceRef.current.setView([centerLat, centerLng], zoomLevel, { 
+            animate: false, 
+            duration: 0
+          });
+        } catch (err) {
+          console.warn('Erro ao ajustar mapa para OS próxima:', err);
         }
-      } catch (err) {
-        console.warn('Erro ao ajustar mapa para OS próxima:', err);
       }
+    } catch (err) {
+      console.warn('Erro ao destacar OS próxima:', err);
     }
-    
-  }, [osProxima, userLocation]);
+  }, [osProxima, userLocation, isMapMounted]);
   
   // Adiciona CSS para melhorar a visualização em dispositivos móveis
   useEffect(() => {

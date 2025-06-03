@@ -280,37 +280,89 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       return;
     }
     
+    console.log('Mapa inicializado, armazenando referências');
+    
     // Armazena as referências
     setMap(mapInstance);
     setMarkersLayer(markersLayerInstance);
     setRouteLayer(routeLayerInstance);
     
-    // Se já temos dados carregados, exibe-os agora que o mapa está pronto
+    // Se já temos dados carregados, exibe-os agora que o mapa está pronto,
+    // mas com segurança adicional e usando timeout mais longo
     if (optimizedRoute && todasOrdens.length > 0) {
-      // Usa um timeout maior para garantir que o DOM esteja completamente renderizado
+      // Primeiro garante que o mapa está completamente inicializado
+      // Atrasa para garantir que o DOM esteja estabilizado
       setTimeout(() => {
         try {
-          // Verifica novamente se o mapa ainda é válido
-          if (mapInstance && mapInstance.getContainer() && 
+          // Verifica se o mapa ainda existe e está pronto para uso
+          if (mapInstance && 
+              mapInstance.getContainer() && 
               mapInstance.getContainer().clientWidth > 0) {
             
-            // Exibe as ordens no mapa
+            console.log('Exibindo ordens e rotas no mapa após inicialização');
+            
+            // Exibe as ordens no mapa com segurança
             exibirOrdens(optimizedRoute);
             
-            // Exibe a rota, com verificação de segurança
-            const { distance, duration } = exibirRota(optimizedRoute, routeLayerInstance);
+            // Primeiro, vamos centralizar o mapa em um ponto conhecido
+            // Isso evita problemas com _leaflet_pos undefined
+            const defaultCenter: L.LatLngTuple = [-20.48, -55.80];
+            const defaultZoom = 12;
             
-            // Atualiza as estatísticas
-            setStats(prev => ({
-              ...prev,
-              routeDistance: distance,
-              routeDuration: duration
-            }));
+            // Usamos setView que é mais estável que setZoom + panTo
+            mapInstance.setView(defaultCenter, defaultZoom, { 
+              animate: false,
+              duration: 0
+            });
+            
+            // Depois de centralizar, aguardamos um pouco para garantir que o mapa está estável
+            setTimeout(() => {
+              try {
+                // Agora sim, exibimos a rota com segurança
+                const { distance, duration } = exibirRota(optimizedRoute, routeLayerInstance);
+                
+                // Atualiza as estatísticas
+                setStats(prev => ({
+                  ...prev,
+                  routeDistance: distance,
+                  routeDuration: duration
+                }));
+                
+                // Após exibir tudo, podemos tentar ajustar o zoom para mostrar todos os pontos
+                // mas fazemos isso com segurança extra
+                setTimeout(() => {
+                  try {
+                    // Verifica novamente se o mapa ainda é válido
+                    if (mapInstance && (mapInstance as any)._loaded) {
+                      // Se tivermos ordens para mostrar, calcula um centro aproximado
+                      if (todasOrdens.length > 0) {
+                        const centerLat = todasOrdens.reduce((sum, os) => sum + os.lat, 0) / todasOrdens.length;
+                        const centerLng = todasOrdens.reduce((sum, os) => sum + os.lng, 0) / todasOrdens.length;
+                        
+                        // Cria um par de coordenadas com o tipo correto
+                        const center: L.LatLngTuple = [centerLat, centerLng];
+                        
+                        // Usa setView com o tipo correto
+                        mapInstance.setView(center, 13, { 
+                          animate: false,
+                          duration: 0
+                        });
+                      }
+                    }
+                  } catch (err) {
+                    console.warn('Erro ao ajustar visualização final do mapa:', err);
+                    // Falhar aqui não é crítico, o mapa já deve estar exibindo o conteúdo
+                  }
+                }, 300);
+              } catch (err) {
+                console.warn('Erro ao exibir rota após centralização do mapa:', err);
+              }
+            }, 300);
           }
         } catch (e) {
           console.warn('Erro ao exibir dados após inicialização do mapa:', e);
         }
-      }, 500); // Aumentamos o timeout para 500ms
+      }, 1000); // Aumentamos o timeout para 1000ms para garantir estabilidade
     }
   }
   
