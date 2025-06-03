@@ -34,12 +34,11 @@ export interface OSPoint {
 
 // Interfaces para autenticação
 export interface LoginCredentials {
-  team_code: string
+  code: string
 }
 
 export interface LoginResponse {
+  id: string
+  name: string
   token: string
-  team_id: string
-  team_name: string
-  team_code: string
 } 

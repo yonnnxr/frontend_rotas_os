@@ -19,7 +19,8 @@ export default function Login({ onLogin }: LoginProps) {
     // Verifica se a API está online
     const checkApiStatus = async () => {
       try {
-        const response = await fetch(`${apiEndpoint}/health`, { 
+        // Usa um endpoint que sabemos que existe (não precisamos do /health)
+        const response = await fetch(`${apiEndpoint}/api/teams`, { 
           method: 'GET',
           mode: 'cors',
           headers: {
@@ -52,17 +53,17 @@ export default function Login({ onLogin }: LoginProps) {
     setError('')
     
     try {
-      console.log(`Tentando login em: ${apiUrl}/api/auth/login`)
+      console.log(`Tentando login em: ${apiUrl}/api/auth/team`)
       
-      const response = await fetch(`${apiUrl}/api/auth/login`, {
+      const response = await fetch(`${apiUrl}/api/auth/team`, {
         method: 'POST',
         mode: 'cors', // Explicitamente define CORS mode
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          team_code: teamCode
-        } as LoginCredentials)
+          code: teamCode // Modificado para usar 'code' em vez de 'team_code'
+        })
       })
       
       if (!response.ok) {
@@ -72,7 +73,9 @@ export default function Login({ onLogin }: LoginProps) {
         throw new Error(
           response.status === 401
             ? 'Código da equipe inválido'
-            : `Erro ao fazer login (${response.status})`
+            : response.status === 404
+              ? 'Equipe não encontrada'
+              : `Erro ao fazer login (${response.status})`
         )
       }
       
@@ -80,9 +83,9 @@ export default function Login({ onLogin }: LoginProps) {
       
       // Salva os dados no localStorage
       localStorage.setItem('token', data.token)
-      localStorage.setItem('team_id', data.team_id)
-      localStorage.setItem('team_name', data.team_name)
-      localStorage.setItem('team_code', data.team_code)
+      localStorage.setItem('team_id', data.id)
+      localStorage.setItem('team_name', data.name)
+      localStorage.setItem('team_code', teamCode)
       
       // Notifica o componente pai
       onLogin()
