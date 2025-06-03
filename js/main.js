@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.seu-dominio.workers.dev/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://backend-rotas-os.onrender.com';
 let map = null;
 let markersLayer = null;
 
@@ -8,7 +8,8 @@ async function login(teamCode) {
         const response = await fetch(`${API_URL}/validate-team`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             body: JSON.stringify({ team_code: teamCode })
         });
@@ -18,16 +19,27 @@ async function login(teamCode) {
         }
 
         const data = await response.json();
+        // Armazena os dados da equipe e o token JWT
         localStorage.setItem('token', data.token);
         localStorage.setItem('team_code', teamCode);
+        localStorage.setItem('team_name', data.name);
+        localStorage.setItem('team_id', data.id);
         
+        // Atualiza a interface
         document.getElementById('login-container').classList.add('hidden');
         document.getElementById('map-container').classList.remove('hidden');
+        
+        // Atualiza a informação da equipe na interface
+        const teamInfoElement = document.getElementById('team-info');
+        if (teamInfoElement) {
+            teamInfoElement.textContent = `Equipe: ${data.name}`;
+        }
         
         initMap();
         loadOrders();
     } catch (error) {
-        alert(error.message);
+        console.error('Erro de login:', error);
+        alert(error.message || 'Erro ao fazer login. Tente novamente.');
     }
 }
 
@@ -35,6 +47,8 @@ async function login(teamCode) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('team_code');
+    localStorage.removeItem('team_name');
+    localStorage.removeItem('team_id');
     
     if (map) {
         map.remove();
@@ -61,29 +75,54 @@ function initMap() {
 async function loadOrders() {
     try {
         const token = localStorage.getItem('token');
-        if (!token) {
+        const teamId = localStorage.getItem('team_id');
+        
+        if (!token || !teamId) {
             logout();
             return;
         }
 
-        const response = await fetch(`${API_URL}/orders`, {
+        // Usa a rota específica da equipe para garantir segurança
+        let url = `${API_URL}/api/teams/${teamId}/geojson`;
+
+        console.log(`Carregando ordens da equipe ${teamId}...`);
+        const response = await fetch(url, {
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
             }
         });
 
         if (!response.ok) {
-            if (response.status === 401) {
+            if (response.status === 401 || response.status === 403) {
+                console.error('Erro de autenticação, fazendo logout');
                 logout();
                 return;
             }
+            
+            // Se a rota específica falhar, tenta a rota alternativa (que também está protegida)
+            console.log('Tentando rota alternativa para ordens de serviço...');
+            const fallbackResponse = await fetch(`${API_URL}/orders`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (fallbackResponse.ok) {
+                const geojsonData = await fallbackResponse.json();
+                displayOrders(geojsonData);
+                return;
+            }
+            
             throw new Error('Erro ao carregar ordens de serviço');
         }
 
         const geojsonData = await response.json();
         displayOrders(geojsonData);
     } catch (error) {
-        alert(error.message);
+        console.error('Erro ao carregar ordens:', error);
+        alert(error.message || 'Erro ao carregar ordens de serviço');
     }
 }
 
@@ -93,10 +132,36 @@ function displayOrders(geojsonData) {
     
     markersLayer.clearLayers();
     
+    // Verifica se temos dados para exibir
+    if (!geojsonData || !geojsonData.features || geojsonData.features.length === 0) {
+        console.log('Nenhuma ordem de serviço para exibir');
+        // Atualiza a interface para mostrar mensagem ao usuário
+        const orderCountElement = document.getElementById('order-count');
+        if (orderCountElement) {
+            orderCountElement.textContent = 'Nenhuma ordem de serviço pendente';
+        }
+        return;
+    }
+    
+    // Atualiza contador de ordens
+    const orderCountElement = document.getElementById('order-count');
+    if (orderCountElement) {
+        orderCountElement.textContent = `${geojsonData.features.length} ordens de serviço`;
+    }
+    
     L.geoJSON(geojsonData, {
         pointToLayer: (feature, latlng) => {
-            const status = feature.properties.status;
-            const color = status === 'pendente' ? 'red' : 'green';
+            // Usa a propriedade situacao para determinar a cor (se disponível)
+            let color = 'red';
+            const situacao = feature.properties.situacao || 
+                             feature.properties.status || 
+                             'pendente';
+            
+            if (situacao.toLowerCase().includes('exec')) {
+                color = 'green';
+            } else if (situacao.toLowerCase().includes('prog')) {
+                color = 'orange';
+            }
             
             return L.circleMarker(latlng, {
                 radius: 8,
@@ -109,10 +174,15 @@ function displayOrders(geojsonData) {
         },
         onEachFeature: (feature, layer) => {
             const props = feature.properties;
+            // Adapta para diferentes formatos de dados
+            const ordemServico = props.ordem_servico || props.nroos || 'N/A';
+            const status = props.status || props.situacao || 'Pendente';
+            const equipe = props.equipe || props.equipeexec || localStorage.getItem('team_name');
+            
             layer.bindPopup(`
-                <strong>OS:</strong> ${props.ordem_servico}<br>
-                <strong>Status:</strong> ${props.status}<br>
-                <strong>Equipe:</strong> ${props.equipe}
+                <strong>OS:</strong> ${ordemServico}<br>
+                <strong>Status:</strong> ${status}<br>
+                <strong>Equipe:</strong> ${equipe}
             `);
         }
     }).addTo(markersLayer);
