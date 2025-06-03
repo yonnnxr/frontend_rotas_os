@@ -244,41 +244,26 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
     })
     
-    // Ajusta o zoom para mostrar todos os pontos - com proteção contra erros
+    // Ajusta o zoom para mostrar todos os pontos - com nova abordagem mais segura
     if (points.length > 0) {
-      try {
-        // Em vez de usar fitBounds, vamos calcular o centro manualmente
-        // e usar setView com um zoom fixo, que é menos propenso a erros
+      // Em vez de usar qualquer método do Leaflet agora, armazenamos os pontos
+      // e vamos manipular o zoom do mapa apenas quando ele estiver completamente pronto
+      const centerLat = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+      const centerLng = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+      
+      // Se o mapa estiver pronto, tentamos definir a visualização
+      // mas ainda com proteções extras
+      if (map) {
+        // Definir um nível de zoom adequado para a maioria dos casos
+        const zoomLevel = 13;
         
-        // Calcula o centro de todos os pontos
-        let totalLat = 0;
-        let totalLng = 0;
-        points.forEach(point => {
-          totalLat += point[0]; // Latitude
-          totalLng += point[1]; // Longitude
-        });
-        
-        const centerLat = totalLat / points.length;
-        const centerLng = totalLng / points.length;
-        
-        // Usa um timeout para garantir que o DOM foi atualizado
-        setTimeout(() => {
-          try {
-            if (map && map.getContainer()) {
-              // Define um nível de zoom fixo que geralmente funciona bem para grupos de pontos
-              const zoomLevel = 13; 
-              
-              // Use setView sem animação
-              map.setView([centerLat, centerLng], zoomLevel, {
-                animate: false
-              });
-            }
-          } catch (e) {
-            console.warn('Erro ao ajustar visualização do mapa:', e);
-          }
-        }, 200);
-      } catch (e) {
-        console.warn('Erro ao preparar ajuste de visualização:', e);
+        // Usamos typecast para acessar a propriedade interna _loaded
+        const leafletMap = map as any;
+        if (leafletMap && leafletMap._loaded) {
+          // Usamos panTo em vez de setView - é mais seguro em muitos casos
+          map.setZoom(zoomLevel, { animate: false });
+          map.panTo([centerLat, centerLng], { animate: false });
+        }
       }
     }
   }
@@ -342,15 +327,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         // Centraliza o mapa na posição do usuário, com verificação de segurança
         if (map) {
           try {
-            setTimeout(() => {
-              if (map && map.getContainer()) {
-                map.setView([location.lat, location.lng], 15, {
-                  animate: false // Desativa animação para evitar erros
-                });
-              }
-            }, 100);
+            const leafletMap = map as any;
+            if (leafletMap && leafletMap._loaded) {
+              // Abordagem mais segura: primeiro definir zoom, depois posição
+              map.setZoom(15, { animate: false });
+              map.panTo([location.lat, location.lng], { animate: false });
+            }
           } catch (e) {
-            console.warn('Erro ao centralizar mapa:', e);
+            console.warn('Erro ao centralizar mapa na posição do usuário:', e);
           }
         }
         

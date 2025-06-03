@@ -25,62 +25,105 @@ const MapView: React.FC<MapViewProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   
-  // Inicializa o mapa
+  // Inicializa o mapa com uma abordagem mais robusta
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
-
+    
+    // Removemos os timeouts aninhados e simplificamos a inicialização
+    // Primeiro definimos uma flag para controlar a inicialização
+    let isMapInitialized = false;
+    
     try {
-      // Aguarda um momento para garantir que o contêiner está totalmente renderizado
-      setTimeout(() => {
-        if (!mapRef.current || mapInstanceRef.current) return;
+      // Definir tamanho explícito para o contêiner para garantir que o Leaflet tenha
+      // dimensões definidas para trabalhar - isso pode prevenir muitos erros de posicionamento
+      if (mapRef.current) {
+        mapRef.current.style.width = '100%';
+        mapRef.current.style.height = '100%';
+      }
+      
+      // Inicializamos o mapa com opções mais seguras
+      const mapOptions: L.MapOptions = {
+        // Desabilitamos todas as animações e recursos que podem causar problemas
+        fadeAnimation: false,
+        zoomAnimation: false,
+        markerZoomAnimation: false,
+        inertia: false,
+        doubleClickZoom: false, // Desabilita zoom com duplo clique
+        attributionControl: false, // Simplifica removendo o controle de atribuição
+        zoomControl: false, // Adicionaremos controles manualmente depois
+        preferCanvas: true, // Usar Canvas em vez de SVG pode ser mais estável
+      };
+      
+      // Inicializar o mapa
+      const newMap = L.map(mapRef.current, mapOptions);
+      
+      // Definir view inicial sem animação
+      newMap.setView([-20.48, -55.80], 12, { animate: false });
+      
+      // Adicionar a camada base de forma simples
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(newMap);
+      
+      // Adicionar camadas
+      const newMarkersLayer = L.layerGroup().addTo(newMap);
+      const newRouteLayer = L.layerGroup().addTo(newMap);
+      
+      // Apenas quando todas as camadas estiverem carregadas, consideramos o mapa pronto
+      newMap.whenReady(() => {
+        console.log('Mapa realmente pronto!');
         
-        // Região de Anastácio, MS
-        const newMap = L.map(mapRef.current, {
-          // Opções para reduzir erros
-          fadeAnimation: false,
-          zoomAnimation: false,
-          markerZoomAnimation: false,
-          inertia: false
-        }).setView([-20.48, -55.80], 12);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19
-        }).addTo(newMap);
-        
-        const newMarkersLayer = L.layerGroup().addTo(newMap);
-        const newRouteLayer = L.layerGroup().addTo(newMap);
-        
+        // Armazenar referências
         mapInstanceRef.current = newMap;
         markersLayerRef.current = newMarkersLayer;
         routeLayerRef.current = newRouteLayer;
         
-        // Dá mais tempo para o mapa renderizar completamente antes de notificar
-        setTimeout(() => {
-          if (newMap && newMap.getContainer() && newMap.getContainer().clientWidth > 0) {
-            // Notifica o componente pai que o mapa está pronto
-            onMapReady(newMap, newMarkersLayer, newRouteLayer);
-          } else {
-            console.error('Mapa não inicializou corretamente');
-          }
-        }, 300);
-      }, 100);
+        // Agora adicionamos os controles que são menos críticos
+        L.control.zoom({
+          position: 'bottomright'
+        }).addTo(newMap);
+        
+        L.control.attribution({
+          position: 'bottomleft',
+          prefix: '© OpenStreetMap'
+        }).addTo(newMap);
+        
+        // Definir a flag para evitar inicialização duplicada
+        isMapInitialized = true;
+        
+        // Notificar o componente pai que o mapa está pronto
+        onMapReady(newMap, newMarkersLayer, newRouteLayer);
+      });
+      
+      // Adicionar um listener extra para garantir que detectamos quando o mapa está realmente pronto
+      newMap.on('load', () => {
+        if (!isMapInitialized && mapInstanceRef.current === null) {
+          console.log('Mapa carregado via evento load');
+          mapInstanceRef.current = newMap;
+          markersLayerRef.current = newMarkersLayer;
+          routeLayerRef.current = newRouteLayer;
+          onMapReady(newMap, newMarkersLayer, newRouteLayer);
+          isMapInitialized = true;
+        }
+      });
     } catch (err) {
-      console.error('Erro ao inicializar mapa:', err);
+      console.error('Erro fatal ao inicializar mapa:', err);
     }
     
     // Cleanup na desmontagem
     return () => {
-      if (mapInstanceRef.current) {
-        try {
+      try {
+        if (mapInstanceRef.current) {
+          console.log('Removendo mapa na desmontagem do componente');
           mapInstanceRef.current.remove();
-        } catch (err) {
-          console.warn('Erro ao remover mapa:', err);
         }
+      } catch (err) {
+        console.warn('Erro ao remover mapa:', err);
+      } finally {
+        mapInstanceRef.current = null;
+        markersLayerRef.current = null;
+        routeLayerRef.current = null;
       }
-      mapInstanceRef.current = null;
-      markersLayerRef.current = null;
-      routeLayerRef.current = null;
     };
   }, [onMapReady]);
   
@@ -180,10 +223,9 @@ const MapView: React.FC<MapViewProps> = ({
     // Se tivermos localização do usuário, mostra uma visualização que inclua ambos
     if (userLocation && mapInstanceRef.current) {
       try {
-        // Verifica se o mapa está realmente pronto antes de tentar operações
-        if (mapInstanceRef.current.getContainer() && 
-            mapInstanceRef.current.getContainer().clientWidth > 0) {
-          
+        // Verifica se o mapa está realmente pronto
+        const leafletMap = mapInstanceRef.current as any;
+        if (leafletMap && leafletMap._loaded) {
           // Em vez de usar fitBounds, calculamos o centro entre o usuário e a OS
           const centerLat = (userLocation.lat + osProxima.lat) / 2;
           const centerLng = (userLocation.lng + osProxima.lng) / 2;
@@ -200,17 +242,12 @@ const MapView: React.FC<MapViewProps> = ({
           else if (maxDelta > 0.02) zoomLevel = 13;
           else if (maxDelta > 0.01) zoomLevel = 14;
           
-          // Usa setTimeout para garantir que o mapa tenha tempo de renderizar
-          setTimeout(() => {
-            if (mapInstanceRef.current) {
-              mapInstanceRef.current.setView([centerLat, centerLng], zoomLevel, {
-                animate: false // Desativa animação para evitar erros
-              });
-            }
-          }, 200);
+          // Usar abordagem mais segura: primeiro definir zoom, depois posição
+          mapInstanceRef.current.setZoom(zoomLevel, { animate: false });
+          mapInstanceRef.current.panTo([centerLat, centerLng], { animate: false });
         }
       } catch (err) {
-        console.warn('Erro ao ajustar mapa:', err);
+        console.warn('Erro ao ajustar mapa para OS próxima:', err);
       }
     }
     
