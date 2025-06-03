@@ -65,15 +65,22 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       setTodasOrdens(ordens)
       setStats(prev => ({ ...prev, ordersCount: ordens.length }))
       
-      // Exibe visualmente no mapa
-      exibirOrdens(dadosGeoJSON)
-      const { distance, duration } = exibirRota(dadosGeoJSON, routeLayer!)
-      
-      setStats(prev => ({
-        ...prev,
-        routeDistance: distance,
-        routeDuration: duration
-      }))
+      // Só exibe no mapa se ele já estiver inicializado
+      if (map && markersLayer && routeLayer) {
+        // Exibe visualmente no mapa
+        exibirOrdens(dadosGeoJSON)
+        const { distance, duration } = exibirRota(dadosGeoJSON, routeLayer)
+        
+        setStats(prev => ({
+          ...prev,
+          routeDistance: distance,
+          routeDuration: duration
+        }))
+      } else {
+        console.log('Mapa ainda não inicializado, dados carregados mas não exibidos')
+        // Vamos guardar os dados para exibir quando o mapa estiver pronto
+        setOptimizedRoute(dadosGeoJSON)
+      }
       
       setOptimizedRoute(dadosGeoJSON)
       
@@ -252,6 +259,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setMap(mapInstance)
     setMarkersLayer(markersLayerInstance)
     setRouteLayer(routeLayerInstance)
+    
+    // Se já temos dados carregados, exibe-os agora que o mapa está pronto
+    if (optimizedRoute && todasOrdens.length > 0) {
+      // Pequeno timeout para garantir que o mapa está completamente renderizado
+      setTimeout(() => {
+        exibirOrdens(optimizedRoute)
+        const { distance, duration } = exibirRota(optimizedRoute, routeLayerInstance)
+        
+        setStats(prev => ({
+          ...prev,
+          routeDistance: distance,
+          routeDuration: duration
+        }))
+      }, 300)
+    }
   }
   
   // Função para obter a localização atual do usuário

@@ -25,8 +25,14 @@ export const criarMarcadorUsuario = (lat: number, lng: number): L.Marker => {
 };
 
 // Função para exibir a rota visualmente (apenas visualização, sem navegação interna)
-export const exibirRota = (geojsonData: GeoJSONData, routeLayer: L.LayerGroup): { distance: number, duration: number } => {
-  routeLayer.clearLayers();
+export const exibirRota = (geojsonData: GeoJSONData, routeLayer: L.LayerGroup | null): { distance: number, duration: number } => {
+  // Verifica se o routeLayer existe antes de limpar
+  if (routeLayer) {
+    routeLayer.clearLayers();
+  } else {
+    console.warn("routeLayer é null, não é possível exibir a rota");
+    return { distance: 0, duration: 0 };
+  }
   
   // Valores padrão
   let totalDistance = 0;

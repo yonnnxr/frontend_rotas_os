@@ -151,11 +151,26 @@ const MapView: React.FC<MapViewProps> = ({
     
     // Se tivermos localização do usuário, centralize o mapa para incluir ambos
     if (userLocation && mapInstanceRef.current) {
-      const bounds = L.latLngBounds(
-        [userLocation.lat, userLocation.lng],
-        [osProxima.lat, osProxima.lng]
-      );
-      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+      try {
+        // Verifica se o mapa está realmente pronto antes de tentar operações
+        if (mapInstanceRef.current.getContainer() && 
+            mapInstanceRef.current.getContainer().clientWidth > 0) {
+          
+          const bounds = L.latLngBounds(
+            [userLocation.lat, userLocation.lng],
+            [osProxima.lat, osProxima.lng]
+          );
+          
+          // Usa setTimeout para garantir que o mapa tenha tempo de renderizar
+          setTimeout(() => {
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+            }
+          }, 100);
+        }
+      } catch (err) {
+        console.warn('Erro ao ajustar mapa:', err);
+      }
     }
     
   }, [osProxima, userLocation]);
