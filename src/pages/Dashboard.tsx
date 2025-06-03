@@ -29,6 +29,12 @@ interface RouteInstruction {
   duration: number
 }
 
+interface UserLocation {
+  lat: number
+  lng: number
+  accuracy: number
+}
+
 export default function Dashboard({ onLogout }: DashboardProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<L.Map | null>(null)
@@ -43,6 +49,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   })
   const [showInstructions, setShowInstructions] = useState(false)
   const [instructions, setInstructions] = useState<RouteInstruction[]>([])
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [userMarker, setUserMarker] = useState<L.Marker | null>(null)
+  const [routeStarted, setRouteStarted] = useState(false)
+  const [currentOrderIndex, setCurrentOrderIndex] = useState(-1)
   
   // Inicializa o mapa
   useEffect(() => {
@@ -74,6 +84,373 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     if (!map || !markersLayer) return
     loadOrders()
   }, [map, markersLayer])
+  
+  // Função para obter a localização atual do usuário
+  const getCurrentLocation = () => {
+    if (!map) return;
+    
+    setLoading(true);
+    
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          
+          // Atualiza o estado com a localização do usuário
+          setUserLocation({
+            lat: latitude,
+            lng: longitude,
+            accuracy
+          });
+          
+          // Adiciona marcador na posição do usuário, ou atualiza se já existir
+          updateUserMarker(latitude, longitude);
+          
+          // Centraliza o mapa na posição do usuário
+          map.setView([latitude, longitude], 15);
+          
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Erro ao obter localização:', error.message);
+          alert(`Não foi possível obter sua localização: ${error.message}`);
+          setLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      alert('Geolocalização não é suportada pelo seu navegador');
+      setLoading(false);
+    }
+  };
+  
+  // Função para atualizar o marcador do usuário
+  const updateUserMarker = (lat: number, lng: number) => {
+    if (!map) return;
+    
+    // Remove o marcador existente se houver
+    if (userMarker) {
+      userMarker.remove();
+    }
+    
+    // Cria um ícone personalizado para o usuário
+    const userIcon = L.divIcon({
+      className: 'user-location-icon',
+      html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+    
+    // Adiciona um novo marcador
+    const newMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+    newMarker.bindPopup('Sua localização atual');
+    
+    setUserMarker(newMarker);
+  };
+  
+  // Inicia o monitoramento contínuo da localização
+  const startLocationTracking = () => {
+    if (!('geolocation' in navigator)) {
+      alert('Geolocalização não é suportada pelo seu navegador');
+      return;
+    }
+    
+    // Primeiro obtém a localização inicial
+    getCurrentLocation();
+    
+    // Inicia o monitoramento contínuo
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        
+        setUserLocation({
+          lat: latitude,
+          lng: longitude,
+          accuracy
+        });
+        
+        updateUserMarker(latitude, longitude);
+        
+        // Se a rota foi iniciada, atualiza a navegação
+        if (routeStarted && optimizedRoute) {
+          updateNavigationToNextOrder(latitude, longitude);
+        }
+      },
+      (error) => {
+        console.error('Erro ao monitorar localização:', error.message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+    
+    // Guarda o ID do monitoramento para limpeza posterior
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  };
+  
+  // Função para atualizar a navegação para a próxima ordem
+  const updateNavigationToNextOrder = (userLat: number, userLng: number) => {
+    if (!optimizedRoute || !optimizedRoute.features || optimizedRoute.features.length === 0) return;
+    
+    // Filtra apenas os pontos (ordens)
+    const orderFeatures = optimizedRoute.features.filter(feature => 
+      feature.geometry && feature.geometry.type === 'Point'
+    );
+    
+    if (orderFeatures.length === 0) return;
+    
+    // Se não temos um índice atual ou já chegamos ao final, encontre a ordem mais próxima
+    if (currentOrderIndex < 0 || currentOrderIndex >= orderFeatures.length) {
+      findNearestOrder(userLat, userLng, orderFeatures);
+      return;
+    }
+    
+    // Obtém a ordem atual
+    const currentOrder = orderFeatures[currentOrderIndex];
+    const coords = currentOrder.geometry.coordinates as number[];
+    
+    // Corrigimos a longitude (mesma correção usada em displayOrders)
+    const orderLng = coords[0] - 12;
+    const orderLat = coords[1];
+    
+    // Calcula a distância até a ordem atual
+    const distance = calculateDistance(userLat, userLng, orderLat, orderLng);
+    
+    // Se estiver a menos de 50 metros da ordem atual, avance para a próxima
+    if (distance < 0.05) { // 50 metros
+      // Marca a ordem atual como concluída (visual)
+      highlightCompletedOrder(currentOrderIndex);
+      
+      // Avança para a próxima ordem
+      if (currentOrderIndex < orderFeatures.length - 1) {
+        setCurrentOrderIndex(currentOrderIndex + 1);
+        
+        // Atualiza as instruções para a próxima ordem
+        const nextOrder = orderFeatures[currentOrderIndex + 1];
+        navigateToOrder(nextOrder);
+      } else {
+        // Chegou ao final de todas as ordens
+        alert('Parabéns! Você concluiu todas as ordens de serviço.');
+        setRouteStarted(false);
+      }
+    }
+  };
+  
+  // Função para destacar uma ordem como concluída
+  const highlightCompletedOrder = (index: number) => {
+    if (!markersLayer) return;
+    
+    // Essa função seria implementada para alterar visualmente o marcador no mapa
+    // Por exemplo, mudando a cor para verde ou adicionando um ícone de check
+    // Requer acesso aos marcadores individuais, que precisariam ser armazenados
+  };
+  
+  // Função para calcular a distância entre dois pontos (em km)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distância em km
+  };
+  
+  // Função para encontrar a ordem mais próxima
+  const findNearestOrder = (userLat: number, userLng: number, orderFeatures: GeoJSONFeature[]) => {
+    if (!orderFeatures.length) return;
+    
+    let nearestIndex = -1;
+    let minDistance = Number.MAX_VALUE;
+    
+    orderFeatures.forEach((feature, index) => {
+      const coords = feature.geometry.coordinates as number[];
+      
+      // Corrigimos a longitude (mesma correção usada em displayOrders)
+      const orderLng = coords[0] - 12;
+      const orderLat = coords[1];
+      
+      const distance = calculateDistance(userLat, userLng, orderLat, orderLng);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    
+    if (nearestIndex >= 0) {
+      setCurrentOrderIndex(nearestIndex);
+      navigateToOrder(orderFeatures[nearestIndex]);
+    }
+  };
+  
+  // Função para navegar até uma ordem específica
+  const navigateToOrder = (order: GeoJSONFeature) => {
+    if (!map || !userLocation) return;
+    
+    const coords = order.geometry.coordinates as number[];
+    
+    // Corrigimos a longitude (mesma correção usada em displayOrders)
+    const orderLng = coords[0] - 12;
+    const orderLat = coords[1];
+    
+    // Solicita uma rota de navegação da posição atual até a ordem
+    handleOptimizeRouteToPoint(userLocation.lat, userLocation.lng, orderLat, orderLng);
+    
+    // Exibe uma mensagem informativa
+    const props = order.properties || {};
+    const ordemServico = props.ordem_servico || props.nroos || 'N/A';
+    const distancia = calculateDistance(userLocation.lat, userLocation.lng, orderLat, orderLng);
+    
+    // Atualiza o marcador para destacar a ordem atual
+    if (markersLayer) {
+      // Aqui poderia ser implementada a lógica para destacar visualmente a ordem atual
+    }
+    
+    // Abre o popup da ordem no mapa
+    if (map) {
+      setTimeout(() => {
+        L.popup()
+          .setLatLng([orderLat, orderLng])
+          .setContent(`
+            <div>
+              <strong>Próxima OS:</strong> ${ordemServico}<br>
+              <strong>Distância:</strong> ${distancia.toFixed(2)} km<br>
+              <strong>Tempo estimado:</strong> ${(distancia / 0.5).toFixed(0)} min<br>
+              <em>Siga as instruções na tela</em>
+            </div>
+          `)
+          .openOn(map);
+      }, 1000);
+    }
+  };
+  
+  // Função para iniciar a rota
+  const handleStartRoute = async () => {
+    try {
+      setLoading(true);
+      
+      // Primeiro, obtém a localização atual
+      getCurrentLocation();
+      
+      // Inicia o monitoramento contínuo da localização
+      startLocationTracking();
+      
+      // Marca que a rota foi iniciada
+      setRouteStarted(true);
+      
+      // Reseta o índice da ordem atual
+      setCurrentOrderIndex(-1);
+      
+      // Usa a API para obter uma rota otimizada a partir da localização atual
+      if (userLocation) {
+        await handleOptimizeRoute(userLocation.lat, userLocation.lng);
+      } else {
+        // Se ainda não temos a localização, vamos esperar um pouco e tentar novamente
+        setTimeout(async () => {
+          if (userLocation) {
+            await handleOptimizeRoute(userLocation.lat, userLocation.lng);
+          } else {
+            // Se ainda não temos a localização, usamos a rota sem ponto de partida
+            await handleOptimizeRoute();
+          }
+        }, 2000);
+      }
+      
+    } catch (error) {
+      console.error('Erro ao iniciar rota:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao iniciar rota');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Função para solicitar uma rota otimizada para um ponto específico
+  const handleOptimizeRouteToPoint = async (startLat: number, startLng: number, endLat: number, endLng: number) => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('token')
+      
+      if (!token) {
+        onLogout()
+        return
+      }
+      
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const url = `${apiUrl}/api/navigation?start_lat=${startLat}&start_lng=${startLng}&end_lat=${endLat}&end_lng=${endLng}&profile=car`
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao obter rota de navegação: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      // Limpa a camada de rota atual
+      if (routeLayer) {
+        routeLayer.clearLayers()
+      }
+      
+      // Adiciona a nova rota ao mapa
+      if (data.features && data.features.length > 0 && map && routeLayer) {
+        const route = data.features[0]
+        
+        L.geoJSON(route as any, {
+          style: {
+            color: route.properties?.color || '#0066CC',
+            weight: route.properties?.weight || 5,
+            opacity: route.properties?.opacity || 0.8
+          }
+        }).addTo(routeLayer)
+        
+        // Atualiza estatísticas
+        if (data.metadata) {
+          setStats(prev => ({
+            ...prev,
+            routeDistance: data.metadata.distance || 0,
+            routeDuration: data.metadata.duration || 0
+          }))
+        }
+        
+        // Atualiza instruções se disponíveis
+        if (data.metadata?.instructions) {
+          setInstructions(data.metadata.instructions)
+          setShowInstructions(true)
+        }
+      }
+      
+      // Centraliza o mapa para mostrar toda a rota
+      if (map) {
+        const bounds = L.latLngBounds([
+          [startLat, startLng],
+          [endLat, endLng]
+        ])
+        map.fitBounds(bounds, { padding: [50, 50] })
+      }
+      
+    } catch (error) {
+      console.error('Erro ao obter rota de navegação:', error)
+      alert(error instanceof Error ? error.message : 'Erro ao obter rota de navegação')
+    } finally {
+      setLoading(false)
+    }
+  };
   
   // Função para carregar as ordens de serviço
   const loadOrders = async () => {
@@ -306,7 +683,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
   
   // Função para otimizar a rota
-  const handleOptimizeRoute = async () => {
+  const handleOptimizeRoute = async (startLat?: number, startLng?: number) => {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
@@ -318,7 +695,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
       
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      const url = `${apiUrl}/api/teams/${teamId}/optimized-route?consider_traffic=true&profile=car`
+      let url = `${apiUrl}/api/teams/${teamId}/optimized-route?consider_traffic=true&profile=car`
+      
+      // Se fornecido um ponto de partida, adiciona à URL
+      if (startLat !== undefined && startLng !== undefined) {
+        url += `&start_lat=${startLat}&start_lng=${startLng}`
+      }
       
       const response = await fetch(url, {
         headers: {
@@ -334,6 +716,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       const data = await response.json()
       displayOrders(data)
       setOptimizedRoute(data)
+      
+      // Se a rota já foi iniciada, encontra a ordem mais próxima para navegar
+      if (routeStarted && userLocation && data.features) {
+        const orderFeatures = data.features.filter(feature => 
+          feature.geometry && feature.geometry.type === 'Point'
+        )
+        
+        if (orderFeatures.length > 0) {
+          findNearestOrder(userLocation.lat, userLocation.lng, orderFeatures)
+        }
+      }
     } catch (error) {
       console.error('Erro ao otimizar rota:', error)
       alert(error instanceof Error ? error.message : 'Erro ao otimizar rota')
@@ -388,6 +781,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setInstructions([])
     setShowInstructions(false)
     setStats(prev => ({ ...prev, routeDistance: 0, routeDuration: 0 }))
+    setRouteStarted(false)
     
     // Recarrega as ordens de serviço para remover os números de ordem
     loadOrders()
@@ -417,23 +811,35 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       <div className="bg-gray-100 border-b">
         <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between">
           <div className="flex space-x-2">
-            <button
-              onClick={handleOptimizeRoute}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              {loading ? 'Otimizando...' : 'Otimizar Rota'}
-            </button>
-            
-            {optimizedRoute && (
+            {!routeStarted ? (
+              <button
+                onClick={handleStartRoute}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                {loading ? 'Iniciando...' : 'Começar Rota'}
+              </button>
+            ) : (
               <>
+                <button
+                  onClick={getCurrentLocation}
+                  disabled={loading}
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Minha Localização
+                </button>
+                
                 <button
                   onClick={handleGetInstructions}
                   disabled={loading}
-                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -448,7 +854,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  Limpar Rota
+                  Finalizar Rota
                 </button>
               </>
             )}
