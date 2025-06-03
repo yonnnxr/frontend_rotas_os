@@ -44,7 +44,7 @@ function App() {
 
   // Renderiza a página de login ou o dashboard baseado no estado de login
   return (
-    <BrowserRouter basename="/Otimizador_de_rotas">
+    <BrowserRouter basename="/">
       {isLoggedIn ? (
         <Dashboard onLogout={handleLogout} />
       ) : (
