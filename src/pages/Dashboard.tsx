@@ -28,6 +28,16 @@ interface UserLocation {
   accuracy: number
 }
 
+interface OSPoint {
+  lat: number
+  lng: number
+  order: number
+  id: string
+  description: string
+  feature: GeoJSONFeature
+  distanceFromUser?: number
+}
+
 export default function Dashboard({ onLogout }: DashboardProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<L.Map | null>(null)
@@ -41,6 +51,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     routeDuration: 0,
   })
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [osProxima, setOsProxima] = useState<OSPoint | null>(null)
+  const [todasOrdens, setTodasOrdens] = useState<OSPoint[]>([])
+  const [ordensAtendidas, setOrdensAtendidas] = useState<string[]>([])
+  const [modoNavegacao, setModoNavegacao] = useState(false)
+  const [mostrarPopupLocalizacao, setMostrarPopupLocalizacao] = useState(false)
   
   // Inicializa o mapa
   useEffect(() => {
@@ -61,6 +76,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setMarkersLayer(newMarkersLayer)
     setRouteLayer(newRouteLayer)
     
+    // Solicita permissão de localização após inicializar o mapa
+    setMostrarPopupLocalizacao(true)
+    
     // Cleanup na desmontagem
     return () => {
       newMap.remove()
@@ -74,10 +92,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [map, markersLayer])
   
   // Função para obter a localização atual do usuário
-  const getCurrentLocation = () => {
-    if (!map) return;
-    
-    setLoading(true);
+  const obterLocalizacaoUsuario = () => {
+    setMostrarPopupLocalizacao(false)
+    setLoading(true)
     
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -92,35 +109,40 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           });
           
           // Centraliza o mapa na posição do usuário e adiciona um marcador
-          map.setView([latitude, longitude], 15);
-          
-          // Adiciona um marcador para a localização do usuário
-          const userIcon = L.divIcon({
-            className: 'user-location-icon',
-            html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
-          });
-          
-          // Remove marcadores antigos e adiciona o novo
-          if (markersLayer) {
-            // Remove apenas marcadores de usuário anteriores
-            markersLayer.eachLayer(layer => {
-              if ((layer as any)._icon?.classList.contains('user-location-icon')) {
-                markersLayer.removeLayer(layer);
-              }
+          if (map) {
+            map.setView([latitude, longitude], 15);
+            
+            // Adiciona um marcador para a localização do usuário
+            const userIcon = L.divIcon({
+              className: 'user-location-icon',
+              html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
             });
             
-            // Adiciona o novo marcador
-            const newMarker = L.marker([latitude, longitude], { icon: userIcon }).addTo(markersLayer);
-            newMarker.bindPopup('Sua localização atual');
+            // Remove marcadores antigos e adiciona o novo
+            if (markersLayer) {
+              // Remove apenas marcadores de usuário anteriores
+              markersLayer.eachLayer(layer => {
+                if ((layer as any)._icon?.classList.contains('user-location-icon')) {
+                  markersLayer.removeLayer(layer);
+                }
+              });
+              
+              // Adiciona o novo marcador
+              const newMarker = L.marker([latitude, longitude], { icon: userIcon }).addTo(markersLayer);
+              newMarker.bindPopup('Sua localização atual');
+            }
           }
           
           setLoading(false);
+          
+          // Inicia o modo de navegação por proximidade automaticamente
+          iniciarNavegacaoProximidade();
         },
         (error) => {
           console.error('Erro ao obter localização:', error.message);
-          alert(`Não foi possível obter sua localização: ${error.message}`);
+          alert(`Não foi possível obter sua localização: ${error.message}. A navegação por proximidade requer acesso à sua localização.`);
           setLoading(false);
         },
         {
@@ -130,7 +152,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         }
       );
     } else {
-      alert('Geolocalização não é suportada pelo seu navegador');
+      alert('Geolocalização não é suportada pelo seu navegador. A navegação por proximidade não funcionará.');
       setLoading(false);
     }
   };
@@ -139,7 +161,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const openGoogleMapsNavigation = (lat: number, lng: number) => {
     if (!userLocation) {
       alert('Obtenha sua localização atual primeiro');
-      getCurrentLocation();
+      obterLocalizacaoUsuario();
       return;
     }
     
@@ -150,132 +172,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     window.open(googleMapsUrl, '_blank');
   };
 
-  // Função para abrir navegação para rota otimizada no Google Maps
-  const openOptimizedRouteInMaps = async () => {
-    try {
-      setLoading(true);
-      
-      // Primeiro, obtém a localização atual se não tiver
-      if (!userLocation) {
-        await new Promise<void>((resolve, reject) => {
-          if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                const { latitude, longitude, accuracy } = position.coords;
-                setUserLocation({
-                  lat: latitude,
-                  lng: longitude,
-                  accuracy
-                });
-                resolve();
-              },
-              (error) => {
-                alert(`Não foi possível obter sua localização: ${error.message}`);
-                setLoading(false);
-                reject(new Error('Localização necessária para iniciar navegação'));
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          } else {
-            alert('Geolocalização não é suportada pelo seu navegador');
-            setLoading(false);
-            reject(new Error('Geolocalização não suportada'));
-          }
-        });
-      }
-      
-      // Obtém rota otimizada do backend
-      const token = localStorage.getItem('token');
-      const teamId = localStorage.getItem('team_id');
-      
-      if (!token || !teamId) {
-        onLogout();
-        return;
-      }
-      
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const url = `${apiUrl}/api/teams/${teamId}/optimized-route?consider_traffic=true&profile=car`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erro ao otimizar rota: ${response.status}`);
-      }
-      
-      const data: GeoJSONData = await response.json();
-      
-      // Filtra apenas os pontos (ordens)
-      const orderFeatures = data.features.filter(feature => 
-        feature.geometry && feature.geometry.type === 'Point'
-      );
-      
-      if (orderFeatures.length === 0) {
-        alert('Não há ordens de serviço para navegar');
-        setLoading(false);
-        return;
-      }
-      
-      // Extrai coordenadas na ordem correta
-      const waypoints = orderFeatures
-        .sort((a, b) => {
-          const orderA = a.properties?.route_order || 0;
-          const orderB = b.properties?.route_order || 0;
-          return orderA - orderB;
-        })
-        .map(feature => {
-          const coords = feature.geometry.coordinates as number[];
-          // Corrigimos a longitude (mesma correção usada em displayOrders)
-          return {
-            lat: coords[1],
-            lng: coords[0] - 12
-          };
-        });
-      
-      // Se temos pontos, abre o Google Maps com waypoints
-      if (waypoints.length > 0) {
-        let googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLocation?.lat},${userLocation?.lng}`;
-        
-        // O último ponto é o destino
-        const destination = waypoints.pop();
-        googleMapsUrl += `&destination=${destination?.lat},${destination?.lng}`;
-        
-        // Adiciona pontos intermediários (máximo de 8 no Google Maps)
-        if (waypoints.length > 0) {
-          // Google Maps limita a 10 waypoints, então pegamos no máximo 8 (deixando 1 para origin e 1 para destination)
-          const limitedWaypoints = waypoints.slice(0, 8);
-          const waypointsStr = limitedWaypoints
-            .map(wp => `${wp.lat},${wp.lng}`)
-            .join('|');
-          
-          googleMapsUrl += `&waypoints=${waypointsStr}`;
-        }
-        
-        googleMapsUrl += '&travelmode=driving';
-        
-        // Abre em uma nova aba
-        window.open(googleMapsUrl, '_blank');
-      }
-      
-      // Atualiza a visualização no mapa também
-      displayOrders(data);
-      
-    } catch (error) {
-      console.error('Erro ao abrir navegação:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao abrir navegação');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
   // Função para carregar as ordens de serviço
   const loadOrders = async () => {
     try {
@@ -526,6 +422,303 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setOptimizedRoute(geojsonData)
   }
 
+  // Função para calcular a distância entre dois pontos (em km)
+  const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distância em km
+  };
+
+  // Função para encontrar a OS mais próxima da localização atual
+  const encontrarOSMaisProxima = () => {
+    if (!userLocation || todasOrdens.length === 0) return null;
+    
+    // Filtra ordens que ainda não foram atendidas
+    const ordensNaoAtendidas = todasOrdens.filter(os => !ordensAtendidas.includes(os.id));
+    
+    if (ordensNaoAtendidas.length === 0) {
+      return null; // Todas as ordens foram atendidas
+    }
+    
+    // Calcula a distância de cada ordem até o usuário
+    const ordensComDistancia = ordensNaoAtendidas.map(os => ({
+      ...os,
+      distanceFromUser: calcularDistancia(userLocation.lat, userLocation.lng, os.lat, os.lng)
+    }));
+    
+    // Encontra a ordem mais próxima
+    const osMaisProxima = ordensComDistancia.reduce((prev, current) => 
+      (prev.distanceFromUser || Infinity) < (current.distanceFromUser || Infinity) ? prev : current
+    );
+    
+    return osMaisProxima;
+  };
+
+  // Função para iniciar navegação por proximidade
+  const iniciarNavegacaoProximidade = async () => {
+    try {
+      setLoading(true);
+      
+      // Primeiro, obtém a localização atual se não tiver
+      if (!userLocation) {
+        await new Promise<void>((resolve, reject) => {
+          if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                setUserLocation({
+                  lat: latitude,
+                  lng: longitude,
+                  accuracy
+                });
+                resolve();
+              },
+              (error) => {
+                alert(`Não foi possível obter sua localização: ${error.message}`);
+                setLoading(false);
+                reject(new Error('Localização necessária para iniciar navegação'));
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          } else {
+            alert('Geolocalização não é suportada pelo seu navegador');
+            setLoading(false);
+            reject(new Error('Geolocalização não suportada'));
+          }
+        });
+      }
+      
+      // Obtém rota otimizada do backend (apenas para visualização)
+      const token = localStorage.getItem('token');
+      const teamId = localStorage.getItem('team_id');
+      
+      if (!token || !teamId) {
+        onLogout();
+        return;
+      }
+      
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const url = `${apiUrl}/api/teams/${teamId}/geojson`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao obter ordens de serviço: ${response.status}`);
+      }
+      
+      const data: GeoJSONData = await response.json();
+      
+      // Filtra apenas os pontos (ordens)
+      const orderFeatures = data.features.filter(feature => 
+        feature.geometry && feature.geometry.type === 'Point'
+      );
+      
+      if (orderFeatures.length === 0) {
+        alert('Não há ordens de serviço para navegar');
+        setLoading(false);
+        return;
+      }
+      
+      // Armazena todas as ordens de serviço
+      const todasOS = orderFeatures.map(feature => {
+        const coords = feature.geometry.coordinates as number[];
+        return {
+          lat: coords[1],
+          lng: coords[0] - 12, // Correção para Anastácio
+          order: feature.properties?.route_order || 0,
+          id: feature.properties?.id || feature.properties?.ordem_servico || '',
+          description: feature.properties?.ordem_servico || feature.properties?.nroos || 'OS',
+          feature: feature
+        };
+      });
+      
+      setTodasOrdens(todasOS);
+      
+      // Encontra a OS mais próxima
+      setModoNavegacao(true);
+      atualizarProximaOS();
+      
+      // Atualiza a visualização no mapa
+      displayOrders(data);
+      
+    } catch (error) {
+      console.error('Erro ao iniciar navegação:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao iniciar navegação');
+      setModoNavegacao(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função para atualizar qual é a próxima OS
+  const atualizarProximaOS = () => {
+    const proxima = encontrarOSMaisProxima();
+    setOsProxima(proxima);
+    
+    if (proxima) {
+      // Destaca visualmente a próxima OS no mapa
+      destacarProximaOS(proxima);
+      
+      // Centraliza o mapa incluindo o usuário e a próxima OS
+      if (map && userLocation) {
+        const bounds = L.latLngBounds(
+          [userLocation.lat, userLocation.lng],
+          [proxima.lat, proxima.lng]
+        );
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    } else if (ordensAtendidas.length > 0) {
+      // Todas as ordens foram atendidas
+      alert('Parabéns! Você concluiu todas as ordens de serviço.');
+      setModoNavegacao(false);
+    }
+  };
+
+  // Função para destacar visualmente a próxima OS no mapa
+  const destacarProximaOS = (os: OSPoint) => {
+    if (!map || !markersLayer) return;
+    
+    // Remove qualquer destaque anterior
+    markersLayer.eachLayer(layer => {
+      if ((layer as any)._icon?.classList.contains('os-proxima-icon')) {
+        markersLayer.removeLayer(layer);
+      }
+    });
+    
+    // Adiciona um marcador destacado para a próxima OS
+    const proximaIcon = L.divIcon({
+      className: 'os-proxima-icon',
+      html: `<div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background-color:#FF3B30;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);color:white;font-weight:bold;">
+               <span style="font-size:18px;">→</span>
+             </div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+    
+    const marker = L.marker([os.lat, os.lng], { icon: proximaIcon, zIndexOffset: 1000 }).addTo(markersLayer);
+    
+    // Abre automaticamente o popup
+    const popupContent = `
+      <div style="text-align:center;">
+        <h3 style="margin:0 0 8px;font-size:16px;color:#FF3B30;">Próxima OS</h3>
+        <p style="margin:0 0 8px;font-weight:bold;">${os.description}</p>
+        <p style="margin:0 0 12px;">Distância: ${os.distanceFromUser?.toFixed(2) || '?'} km</p>
+        <button
+          onclick="window.dispatchEvent(new CustomEvent('navegar-para-proxima-os'));"
+          style="background-color:#007AFF;color:white;border:none;border-radius:4px;padding:8px 12px;margin-bottom:8px;cursor:pointer;width:100%;"
+        >
+          Navegar até aqui
+        </button>
+        <button
+          onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${os.id}'}}));"
+          style="background-color:#34C759;color:white;border:none;border-radius:4px;padding:8px 12px;cursor:pointer;width:100%;"
+        >
+          Marcar como concluída
+        </button>
+      </div>
+    `;
+    
+    marker.bindPopup(popupContent, {
+      closeButton: false,
+      autoClose: false,
+      closeOnClick: false
+    }).openPopup();
+  };
+
+  // Função para marcar uma OS como concluída
+  const marcarOSComoConcluida = (id: string) => {
+    if (!id) return;
+    
+    setOrdensAtendidas(prev => [...prev, id]);
+    
+    // Atualiza para a próxima OS
+    atualizarProximaOS();
+  };
+
+  // Função para navegar para a próxima OS
+  const navegarParaProximaOS = () => {
+    if (!osProxima || !userLocation) return;
+    
+    // Cria uma URL para o Google Maps com direções da posição atual até a ordem de serviço
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${osProxima.lat},${osProxima.lng}&travelmode=driving`;
+    
+    // Abre em uma nova aba
+    window.open(googleMapsUrl, '_blank');
+  };
+
+  // Adiciona event listeners para os eventos personalizados
+  useEffect(() => {
+    const handleOSConcluida = (e: CustomEvent) => {
+      marcarOSComoConcluida(e.detail.id);
+    };
+    
+    const handleNavegarParaOS = () => {
+      navegarParaProximaOS();
+    };
+    
+    window.addEventListener('os-concluida', handleOSConcluida as EventListener);
+    window.addEventListener('navegar-para-proxima-os', handleNavegarParaOS as EventListener);
+    
+    return () => {
+      window.removeEventListener('os-concluida', handleOSConcluida as EventListener);
+      window.removeEventListener('navegar-para-proxima-os', handleNavegarParaOS as EventListener);
+    };
+  }, [osProxima, userLocation]);
+
+  // Efeito para localização continua durante navegação
+  useEffect(() => {
+    if (!modoNavegacao) return;
+    
+    // Configurar monitoramento contínuo de localização
+    let watchId: number | null = null;
+    
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          setUserLocation({
+            lat: latitude,
+            lng: longitude,
+            accuracy
+          });
+          
+          // Atualizar próxima OS baseada na nova localização
+          atualizarProximaOS();
+        },
+        (error) => {
+          console.error('Erro ao monitorar localização:', error.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+    
+    // Limpar na desmontagem
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [modoNavegacao, todasOrdens, ordensAtendidas]);
+
   return (
     <div className="h-screen flex flex-col">
       <div className="bg-white shadow-md">
@@ -535,6 +728,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <div className="flex items-center">
               <span className="mr-4 text-sm text-gray-600">
                 {stats.ordersCount} ordens de serviço
+                {modoNavegacao && ordensAtendidas.length > 0 && (
+                  <span className="ml-2 text-green-600">({ordensAtendidas.length} concluídas)</span>
+                )}
               </span>
               <button
                 onClick={onLogout}
@@ -550,28 +746,47 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       <div className="bg-gray-100 border-b">
         <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between">
           <div className="flex space-x-2">
-            <button
-              onClick={getCurrentLocation}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Minha Localização
-            </button>
-            
-            <button
-              onClick={openOptimizedRouteInMaps}
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-              Navegar com Google Maps
-            </button>
+            {!modoNavegacao ? (
+              <button
+                onClick={obterLocalizacaoUsuario}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Iniciar Navegação
+              </button>
+            ) : (
+              <>
+                {osProxima ? (
+                  <button
+                    onClick={navegarParaProximaOS}
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Navegar para {osProxima.description}
+                  </button>
+                ) : null}
+                
+                <button
+                  onClick={() => {
+                    setModoNavegacao(false);
+                    setOrdensAtendidas([]);
+                    setOsProxima(null);
+                    loadOrders();
+                  }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Encerrar Navegação
+                </button>
+              </>
+            )}
           </div>
           
           {optimizedRoute && stats.routeDistance > 0 && (
@@ -594,6 +809,32 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <p className="mt-2 text-gray-700">Carregando...</p>
+              </div>
+            </div>
+          )}
+          
+          {mostrarPopupLocalizacao && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+              <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+                <h3 className="text-lg font-medium mb-3">Permissão de Localização</h3>
+                <p className="mb-4 text-gray-600">
+                  Para funcionar corretamente, o sistema precisa acessar sua localização atual.
+                  Isso permitirá encontrar a ordem de serviço mais próxima de você.
+                </p>
+                <div className="flex justify-end space-x-3">
+                  <button 
+                    onClick={() => setMostrarPopupLocalizacao(false)}
+                    className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={obterLocalizacaoUsuario}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Permitir Acesso
+                  </button>
+                </div>
               </div>
             </div>
           )}
