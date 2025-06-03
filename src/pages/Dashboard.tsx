@@ -620,13 +620,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         <p style="margin:0 0 12px;">Distância: ${os.distanceFromUser?.toFixed(2) || '?'} km</p>
         <button
           onclick="window.dispatchEvent(new CustomEvent('navegar-para-proxima-os'));"
-          style="background-color:#007AFF;color:white;border:none;border-radius:4px;padding:8px 12px;margin-bottom:8px;cursor:pointer;width:100%;"
+          style="background-color:#007AFF;color:white;border:none;border-radius:4px;padding:10px;margin-bottom:10px;cursor:pointer;width:100%;font-size:16px;"
         >
           Navegar até aqui
         </button>
         <button
           onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${os.id}'}}));"
-          style="background-color:#34C759;color:white;border:none;border-radius:4px;padding:8px 12px;cursor:pointer;width:100%;"
+          style="background-color:#34C759;color:white;border:none;border-radius:4px;padding:10px;cursor:pointer;width:100%;font-size:16px;"
         >
           Marcar como concluída
         </button>
@@ -636,18 +636,89 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     marker.bindPopup(popupContent, {
       closeButton: false,
       autoClose: false,
-      closeOnClick: false
+      closeOnClick: false,
+      className: 'os-popup-mobile', // Classe CSS para estilização específica
+      maxWidth: 280
     }).openPopup();
+    
+    // Adiciona CSS para melhorar a visualização em dispositivos móveis
+    if (!document.getElementById('popup-mobile-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'popup-mobile-styles';
+      styleEl.textContent = `
+        .os-popup-mobile .leaflet-popup-content {
+          margin: 12px;
+          min-width: 200px;
+        }
+        .os-popup-mobile .leaflet-popup-content button {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        @media (max-width: 640px) {
+          .os-popup-mobile .leaflet-popup-content {
+            min-width: 240px;
+          }
+          .os-popup-mobile .leaflet-popup-content button {
+            padding: 12px;
+            font-size: 16px;
+            margin-bottom: 12px;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
   };
 
   // Função para marcar uma OS como concluída
   const marcarOSComoConcluida = (id: string) => {
     if (!id) return;
     
+    // Verificar se a OS já não foi atendida
+    if (ordensAtendidas.includes(id)) {
+      alert('Esta ordem de serviço já foi concluída!');
+      return;
+    }
+    
+    // Verificar se ainda há OS não atendidas
+    const ordensRestantes = todasOrdens.filter(os => !ordensAtendidas.includes(os.id));
+    if (ordensRestantes.length <= 1) { // A última é a que estamos concluindo agora
+      // Adiciona a OS atual à lista de concluídas
+      setOrdensAtendidas(prev => [...prev, id]);
+      
+      // Mostra mensagem de conclusão
+      setTimeout(() => {
+        alert('Parabéns! Você concluiu todas as ordens de serviço.');
+        setModoNavegacao(false);
+        setOsProxima(null);
+      }, 500);
+      return;
+    }
+    
+    // Adiciona a OS atual à lista de concluídas
     setOrdensAtendidas(prev => [...prev, id]);
     
-    // Atualiza para a próxima OS
-    atualizarProximaOS();
+    // Mostra confirmação visual temporária
+    if (map) {
+      const confirmacaoDiv = document.createElement('div');
+      confirmacaoDiv.className = 'fixed inset-x-0 top-20 flex justify-center z-50';
+      confirmacaoDiv.innerHTML = `
+        <div class="bg-green-600 text-white px-4 py-2 rounded-full shadow-lg animate-bounce">
+          <span class="flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            OS concluída com sucesso!
+          </span>
+        </div>
+      `;
+      
+      document.body.appendChild(confirmacaoDiv);
+      
+      // Remove após alguns segundos
+      setTimeout(() => {
+        document.body.removeChild(confirmacaoDiv);
+      }, 2000);
+    }
   };
 
   // Função para navegar para a próxima OS
@@ -718,6 +789,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       }
     };
   }, [modoNavegacao, todasOrdens, ordensAtendidas]);
+
+  // Efeito para atualizar a próxima OS quando a lista de OS atendidas muda
+  useEffect(() => {
+    if (modoNavegacao && userLocation) {
+      atualizarProximaOS();
+    }
+  }, [modoNavegacao, ordensAtendidas, userLocation]);
 
   return (
     <div className="h-screen flex flex-col">
