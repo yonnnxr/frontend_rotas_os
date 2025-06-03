@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LoginCredentials, LoginResponse } from '../types'
 
 interface LoginProps {
@@ -9,6 +9,36 @@ export default function Login({ onLogin }: LoginProps) {
   const [teamCode, setTeamCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [apiUrl, setApiUrl] = useState('')
+
+  // Detectar URL da API e status do servidor
+  useEffect(() => {
+    const apiEndpoint = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    setApiUrl(apiEndpoint)
+    
+    // Verifica se a API está online
+    const checkApiStatus = async () => {
+      try {
+        const response = await fetch(`${apiEndpoint}/health`, { 
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (!response.ok) {
+          console.warn(`API não está respondendo corretamente: ${response.status}`)
+        } else {
+          console.log('API está online')
+        }
+      } catch (err) {
+        console.error('Erro ao verificar status da API:', err)
+      }
+    }
+    
+    checkApiStatus()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,9 +52,11 @@ export default function Login({ onLogin }: LoginProps) {
     setError('')
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      console.log(`Tentando login em: ${apiUrl}/api/auth/login`)
+      
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
+        mode: 'cors', // Explicitamente define CORS mode
         headers: {
           'Content-Type': 'application/json'
         },
@@ -34,10 +66,13 @@ export default function Login({ onLogin }: LoginProps) {
       })
       
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Sem detalhes do erro')
+        console.error(`Erro na resposta: Status ${response.status}, Detalhes: ${errorText}`)
+        
         throw new Error(
           response.status === 401
             ? 'Código da equipe inválido'
-            : 'Erro ao fazer login'
+            : `Erro ao fazer login (${response.status})`
         )
       }
       
@@ -52,9 +87,23 @@ export default function Login({ onLogin }: LoginProps) {
       // Notifica o componente pai
       onLogin()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido')
+      console.error('Erro completo:', err)
+      setError(err instanceof Error 
+        ? err.message 
+        : 'Erro desconhecido ao conectar ao servidor. Verifique sua conexão.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Alternativa de login offline para desenvolvimento/testes
+  const handleDevLogin = () => {
+    if (import.meta.env.DEV || window.location.hostname === 'localhost') {
+      localStorage.setItem('token', 'dev-token')
+      localStorage.setItem('team_id', 'dev-team')
+      localStorage.setItem('team_name', 'Equipe de Desenvolvimento')
+      localStorage.setItem('team_code', 'DEV123')
+      onLogin()
     }
   }
 
@@ -87,6 +136,9 @@ export default function Login({ onLogin }: LoginProps) {
                   </div>
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-red-800">{error}</h3>
+                    <p className="mt-2 text-xs text-red-700">
+                      URL da API: {apiUrl}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -148,6 +200,18 @@ export default function Login({ onLogin }: LoginProps) {
                 )}
               </button>
             </div>
+            
+            {(import.meta.env.DEV || window.location.hostname === 'localhost') && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleDevLogin}
+                  className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Modo de Desenvolvimento
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </div>
