@@ -1,0 +1,115 @@
+import L from 'leaflet';
+import { GeoJSONData } from '../types';
+
+// Abre navegação para um ponto no Google Maps
+export const navegarParaGoogleMaps = (origem: { lat: number, lng: number } | null, destino: { lat: number, lng: number }) => {
+  // Se não tiver origem, usa apenas o destino (o Google Maps vai usar a localização atual do dispositivo)
+  const googleMapsUrl = origem
+    ? `https://www.google.com/maps/dir/?api=1&origin=${origem.lat},${origem.lng}&destination=${destino.lat},${destino.lng}&travelmode=driving`
+    : `https://www.google.com/maps/dir/?api=1&destination=${destino.lat},${destino.lng}&travelmode=driving`;
+  
+  // Abre em uma nova aba
+  window.open(googleMapsUrl, '_blank');
+};
+
+// Cria um marcador de usuário no mapa
+export const criarMarcadorUsuario = (lat: number, lng: number): L.Marker => {
+  const userIcon = L.divIcon({
+    className: 'user-location-icon',
+    html: `<div style="background-color:#4285F4;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);"></div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+  });
+  
+  return L.marker([lat, lng], { icon: userIcon });
+};
+
+// Função para exibir a rota visualmente (apenas visualização, sem navegação interna)
+export const exibirRota = (geojsonData: GeoJSONData, routeLayer: L.LayerGroup): { distance: number, duration: number } => {
+  routeLayer.clearLayers();
+  
+  // Valores padrão
+  let totalDistance = 0;
+  let totalDuration = 0;
+  
+  // Verifica se há uma rota para exibir
+  const routeFeatures = geojsonData.features.filter(feature => 
+    feature.geometry.type === 'LineString' || 
+    feature.properties?.type === 'route' || 
+    feature.properties?.type === 'traffic_route'
+  );
+  
+  if (routeFeatures.length === 0) {
+    return { distance: 0, duration: 0 };
+  }
+  
+  // Adiciona cada rota ao mapa
+  routeFeatures.forEach(feature => {
+    try {
+      const props = feature.properties || {};
+      const color = props.color || '#0066CC';
+      const weight = props.weight || 4;
+      const opacity = props.opacity || 0.7;
+      
+      // Cria a linha da rota
+      L.geoJSON(feature as any, {
+        style: {
+          color,
+          weight,
+          opacity
+        }
+      }).addTo(routeLayer);
+      
+      // Atualiza as estatísticas
+      if (props.distance) totalDistance += props.distance;
+      if (props.duration) totalDuration += props.duration;
+    } catch (error) {
+      console.error('Erro ao exibir rota:', error);
+    }
+  });
+  
+  return { distance: totalDistance, duration: totalDuration };
+};
+
+// Mostrar notificação temporária na tela
+export const mostrarNotificacao = (mensagem: string, tipo: 'sucesso' | 'erro' | 'info' = 'info', duracao = 3000) => {
+  // Cores baseadas no tipo
+  const cores = {
+    sucesso: 'bg-green-600',
+    erro: 'bg-red-600',
+    info: 'bg-blue-600'
+  };
+  
+  // Ícones baseados no tipo
+  const icones = {
+    sucesso: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+              </svg>`,
+    erro: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+          </svg>`,
+    info: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>`
+  };
+  
+  const confirmacaoDiv = document.createElement('div');
+  confirmacaoDiv.className = 'fixed inset-x-0 top-20 flex justify-center z-50';
+  confirmacaoDiv.innerHTML = `
+    <div class="${cores[tipo]} text-white px-4 py-2 rounded-full shadow-lg animate-bounce">
+      <span class="flex items-center">
+        ${icones[tipo]}
+        ${mensagem}
+      </span>
+    </div>
+  `;
+  
+  document.body.appendChild(confirmacaoDiv);
+  
+  // Remove após o tempo especificado
+  setTimeout(() => {
+    if (document.body.contains(confirmacaoDiv)) {
+      document.body.removeChild(confirmacaoDiv);
+    }
+  }, duracao);
+}; 

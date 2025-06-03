@@ -8,7 +8,7 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Verifica se o usuário já está logado ao iniciar a aplicação
+  // Verifica se o usuário está logado ao carregar a página
   useEffect(() => {
     const token = localStorage.getItem('token')
     const teamId = localStorage.getItem('team_id')
@@ -20,21 +20,16 @@ function App() {
     setLoading(false)
   }, [])
 
-  // Função de login
-  const handleLogin = (token: string, teamId: string, teamName: string, teamCode: string) => {
-    localStorage.setItem('token', token)
-    localStorage.setItem('team_id', teamId)
-    localStorage.setItem('team_name', teamName)
-    localStorage.setItem('team_code', teamCode)
+  // Função para lidar com o login bem-sucedido
+  const handleLogin = () => {
     setIsLoggedIn(true)
   }
 
-  // Função de logout
+  // Função para lidar com o logout
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('team_id')
     localStorage.removeItem('team_name')
-    localStorage.removeItem('team_code')
     setIsLoggedIn(false)
   }
 
