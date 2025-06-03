@@ -177,24 +177,37 @@ const MapView: React.FC<MapViewProps> = ({
       maxWidth: 280
     }).openPopup();
     
-    // Se tivermos localização do usuário, centralize o mapa para incluir ambos
+    // Se tivermos localização do usuário, mostra uma visualização que inclua ambos
     if (userLocation && mapInstanceRef.current) {
       try {
         // Verifica se o mapa está realmente pronto antes de tentar operações
         if (mapInstanceRef.current.getContainer() && 
             mapInstanceRef.current.getContainer().clientWidth > 0) {
           
-          const bounds = L.latLngBounds(
-            [userLocation.lat, userLocation.lng],
-            [osProxima.lat, osProxima.lng]
-          );
+          // Em vez de usar fitBounds, calculamos o centro entre o usuário e a OS
+          const centerLat = (userLocation.lat + osProxima.lat) / 2;
+          const centerLng = (userLocation.lng + osProxima.lng) / 2;
+          
+          // Calcula a distância aproximada para determinar o zoom
+          const deltaLat = Math.abs(userLocation.lat - osProxima.lat);
+          const deltaLng = Math.abs(userLocation.lng - osProxima.lng);
+          const maxDelta = Math.max(deltaLat, deltaLng) * 1.5; // Adiciona margem
+          
+          // Determina um nível de zoom apropriado
+          let zoomLevel = 15; // Zoom padrão
+          if (maxDelta > 0.1) zoomLevel = 11;
+          else if (maxDelta > 0.05) zoomLevel = 12;
+          else if (maxDelta > 0.02) zoomLevel = 13;
+          else if (maxDelta > 0.01) zoomLevel = 14;
           
           // Usa setTimeout para garantir que o mapa tenha tempo de renderizar
           setTimeout(() => {
             if (mapInstanceRef.current) {
-              mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+              mapInstanceRef.current.setView([centerLat, centerLng], zoomLevel, {
+                animate: false // Desativa animação para evitar erros
+              });
             }
-          }, 100);
+          }, 200);
         }
       } catch (err) {
         console.warn('Erro ao ajustar mapa:', err);

@@ -247,26 +247,38 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     // Ajusta o zoom para mostrar todos os pontos - com proteção contra erros
     if (points.length > 0) {
       try {
-        // Verificamos se o mapa está em um estado válido para ajustar o zoom
-        if (map && map.getContainer() && map.getContainer().clientWidth > 0) {
-          // Usa um setTimeout para garantir que o DOM foi atualizado
-          setTimeout(() => {
-            try {
-              if (map && map.getContainer()) {
-                const bounds = L.latLngBounds(points);
-                map.fitBounds(bounds, { 
-                  padding: [50, 50],
-                  maxZoom: 15,  // Limita o zoom máximo para evitar zoom excessivo
-                  animate: false // Desativa animação para reduzir chance de erros
-                });
-              }
-            } catch (e) {
-              console.warn('Erro ao ajustar zoom:', e);
+        // Em vez de usar fitBounds, vamos calcular o centro manualmente
+        // e usar setView com um zoom fixo, que é menos propenso a erros
+        
+        // Calcula o centro de todos os pontos
+        let totalLat = 0;
+        let totalLng = 0;
+        points.forEach(point => {
+          totalLat += point[0]; // Latitude
+          totalLng += point[1]; // Longitude
+        });
+        
+        const centerLat = totalLat / points.length;
+        const centerLng = totalLng / points.length;
+        
+        // Usa um timeout para garantir que o DOM foi atualizado
+        setTimeout(() => {
+          try {
+            if (map && map.getContainer()) {
+              // Define um nível de zoom fixo que geralmente funciona bem para grupos de pontos
+              const zoomLevel = 13; 
+              
+              // Use setView sem animação
+              map.setView([centerLat, centerLng], zoomLevel, {
+                animate: false
+              });
             }
-          }, 100);
-        }
+          } catch (e) {
+            console.warn('Erro ao ajustar visualização do mapa:', e);
+          }
+        }, 200);
       } catch (e) {
-        console.warn('Erro ao preparar ajuste de zoom:', e);
+        console.warn('Erro ao preparar ajuste de visualização:', e);
       }
     }
   }
