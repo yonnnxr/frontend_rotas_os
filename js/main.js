@@ -149,7 +149,8 @@ function displayOrders(geojsonData) {
         orderCountElement.textContent = `${geojsonData.features.length} ordens de serviço`;
     }
     
-    L.geoJSON(geojsonData, {
+    // Adiciona os dados ao mapa
+    const geoJsonLayer = L.geoJSON(geojsonData, {
         pointToLayer: (feature, latlng) => {
             // Usa a propriedade situacao para determinar a cor (se disponível)
             let color = 'red';
@@ -188,9 +189,18 @@ function displayOrders(geojsonData) {
     }).addTo(markersLayer);
     
     // Ajusta o zoom para mostrar todos os pontos
-    const bounds = markersLayer.getBounds();
-    if (bounds.isValid()) {
-        map.fitBounds(bounds);
+    try {
+        const bounds = geoJsonLayer.getBounds();
+        if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds);
+        } else {
+            // Se não conseguir obter bounds válidos, usa uma localização padrão
+            map.setView([-23.550520, -46.633308], 12);
+        }
+    } catch (error) {
+        console.error('Erro ao ajustar o zoom do mapa:', error);
+        // Em caso de erro, usa uma localização padrão
+        map.setView([-23.550520, -46.633308], 12);
     }
 }
 
