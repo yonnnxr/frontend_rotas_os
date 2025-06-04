@@ -41,4 +41,11 @@ export interface LoginResponse {
   id: string
   name: string
   token: string
+}
+
+// Estendendo o tipo Window para incluir nossa propriedade de última atualização de rota
+declare global {
+  interface Window {
+    ultimaAtualizacaoRota?: number;
+  }
 } 

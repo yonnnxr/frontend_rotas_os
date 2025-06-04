@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { GeoJSONData } from '../types';
+import { GeoJSONData, OSPoint, UserLocation } from '../types';
 
 // Abre navegação para um ponto no Google Maps
 export const navegarParaGoogleMaps = (origem: { lat: number, lng: number } | null, destino: { lat: number, lng: number }) => {
@@ -22,6 +22,114 @@ export const criarMarcadorUsuario = (lat: number, lng: number): L.Marker => {
   });
   
   return L.marker([lat, lng], { icon: userIcon });
+};
+
+// Função para obter rota entre dois pontos
+export const obterRota = async (origem: { lat: number, lng: number }, destino: { lat: number, lng: number }) => {
+  // URL da API do OSRM - Open Source Routing Machine (projeto gratuito de roteamento)
+  const url = `https://router.project-osrm.org/route/v1/driving/${origem.lng},${origem.lat};${destino.lng},${destino.lat}?overview=full&geometries=geojson`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Erro ao obter rota');
+    }
+    
+    const data = await response.json();
+    
+    // Verifica se a resposta contém rotas válidas
+    if (!data.routes || !data.routes.length) {
+      throw new Error('Nenhuma rota encontrada');
+    }
+    
+    const route = data.routes[0];
+    
+    // Retorna os dados da rota em formato adequado
+    return {
+      distance: route.distance / 1000, // Converte para km
+      duration: route.duration / 60, // Converte para minutos
+      geometry: route.geometry // Geometria da rota em formato GeoJSON
+    };
+  } catch (error) {
+    console.error('Erro ao obter rota:', error);
+    return null;
+  }
+};
+
+// Função para exibir rota entre a localização do usuário e uma OS no mapa
+export const exibirRotaNoMapa = async (
+  mapa: L.Map | null,
+  rotaLayer: L.LayerGroup | null,
+  origem: UserLocation | null,
+  destino: OSPoint
+): Promise<boolean> => {
+  if (!mapa || !rotaLayer || !origem) {
+    console.warn('Parâmetros inválidos para exibir rota no mapa');
+    return false;
+  }
+  
+  // Limpa rotas anteriores
+  rotaLayer.clearLayers();
+  
+  try {
+    const rotaObtida = await obterRota(
+      { lat: origem.lat, lng: origem.lng },
+      { lat: destino.lat, lng: destino.lng }
+    );
+    
+    if (!rotaObtida) {
+      console.warn('Não foi possível obter a rota');
+      return false;
+    }
+    
+    // Cria linha para a rota com estilo semelhante ao Google Maps
+    const rotaLinha = L.geoJSON(rotaObtida.geometry, {
+      style: {
+        color: '#2979FF', // Azul Google Maps
+        weight: 5,
+        opacity: 0.8,
+        lineJoin: 'round',
+        lineCap: 'round'
+      }
+    });
+    
+    // Adiciona contorno branco para melhor visibilidade
+    const rotaContorno = L.geoJSON(rotaObtida.geometry, {
+      style: {
+        color: '#FFFFFF',
+        weight: 8,
+        opacity: 0.5,
+        lineJoin: 'round',
+        lineCap: 'round'
+      }
+    });
+    
+    // Adiciona as camadas ao mapa
+    rotaContorno.addTo(rotaLayer);
+    rotaLinha.addTo(rotaLayer);
+    
+    // Ajusta o zoom para mostrar toda a rota
+    mapa.fitBounds(rotaLinha.getBounds(), { padding: [50, 50] });
+    
+    // Mostra informações da rota
+    const infoRotaElement = document.createElement('div');
+    infoRotaElement.className = 'info-rota-container';
+    infoRotaElement.innerHTML = `
+      <div style="position:absolute;bottom:20px;left:20px;background-color:white;padding:10px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:1000;">
+        <div style="font-weight:bold;font-size:16px;">${Math.round(rotaObtida.duration)} min (${rotaObtida.distance.toFixed(1)} km)</div>
+        <div style="color:#555;font-size:14px;">Rota mais rápida</div>
+      </div>
+    `;
+    
+    // Remove qualquer info de rota existente
+    document.querySelectorAll('.info-rota-container').forEach(el => el.remove());
+    document.body.appendChild(infoRotaElement);
+    
+    return true;
+  } catch (error) {
+    console.error('Erro ao exibir rota no mapa:', error);
+    return false;
+  }
 };
 
 // Função para exibir a rota visualmente (apenas visualização, sem navegação interna)

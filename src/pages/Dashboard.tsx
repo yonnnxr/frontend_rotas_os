@@ -14,7 +14,12 @@ import { GeoJSONData, UserLocation, OSPoint, GeoJSONFeature } from '../types'
 // Serviços e utilitários
 import { carregarOrdens, processarOrdens, atualizarStatusOS, ApiError } from '../services/apiService'
 import { encontrarOSMaisProxima, obterLocalizacaoUsuario } from '../utils/geoUtils'
-import { navegarParaGoogleMaps, exibirRota, mostrarNotificacao } from '../utils/mapUtils'
+import { 
+  navegarParaGoogleMaps, 
+  exibirRota, 
+  mostrarNotificacao, 
+  exibirRotaNoMapa 
+} from '../utils/mapUtils'
 
 interface DashboardProps {
   onLogout: () => void
@@ -613,67 +618,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     )
   }
   
-  // Quando o usuário clica no botão "Iniciar Navegação" na interface
-  const handleIniciarNavegacao = () => {
-    // Se não temos localização, precisamos obter primeiro
-    if (!userLocation) {
-      console.log('Iniciando navegação - solicitando localização primeiro')
-      setUsuarioRespondeuPopup(false)
-      setMostrarPopupLocalizacao(true)
-      return
-    }
-    
-    try {
-      setLoading(true)
-      
-      // Se não tiver ordens carregadas ainda, carrega
-      if (todasOrdens.length === 0) {
-        carregarDados().then(() => {
-          // Configura o modo de navegação e atualiza a próxima OS
-          setModoNavegacao(true)
-          atualizarProximaOS()
-          setLoading(false)
-        }).catch(error => {
-          console.error('Erro ao carregar dados:', error)
-          setModoNavegacao(false)
-          setLoading(false)
-          mostrarNotificacao('Erro ao iniciar navegação. Tente novamente.', 'erro')
-        })
-      } else {
-        // Se já temos ordens carregadas, apenas inicia a navegação
-        setModoNavegacao(true)
-        atualizarProximaOS()
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error('Erro ao iniciar navegação:', error)
-      mostrarNotificacao(error instanceof Error ? error.message : 'Erro ao iniciar navegação', 'erro')
-      setModoNavegacao(false)
-      setLoading(false)
-    }
-  }
-  
-  // Função para atualizar qual é a próxima OS
-  const atualizarProximaOS = () => {
-    console.log("Atualizando próxima OS, ordens atendidas:", ordensAtendidas)
-    const proxima = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas)
-    
-    if (proxima) {
-      console.log("Nova OS próxima encontrada:", proxima.id, proxima.description)
-      setOsProxima(proxima)
-      
-      // Se tivermos localização, calcula a distância para exibição
-      if (userLocation) {
-        // A função encontrarOSMaisProxima já calcula as distâncias
-      }
-    } else if (ordensAtendidas.length > 0) {
-      // Todas as ordens foram atendidas
-      mostrarNotificacao('Parabéns! Você concluiu todas as ordens de serviço.', 'sucesso')
-      setModoNavegacao(false)
-      setOsProxima(null)
-    }
-  }
-  
   // Função para marcar uma OS como concluída
   const marcarOSComoConcluida = (id: string) => {
     if (!id) {
@@ -751,12 +695,147 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setTimeout(() => {
       console.log('Atualizando próxima OS após conclusão');
       atualizarProximaOS();
+      
+      // NOVA FUNCIONALIDADE: Navegação automática para a próxima OS mais próxima
+      setTimeout(() => {
+        if (modoNavegacao && userLocation) {
+          // Busca a próxima OS mais próxima após a atualização
+          const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas);
+          
+          if (proximaOS) {
+            console.log('Navegando automaticamente para a próxima OS:', proximaOS.id);
+            setOsProxima(proximaOS);
+            
+            // Exibe a rota visual no mapa
+            if (map && routeLayer) {
+              exibirRotaNoMapa(map, routeLayer, userLocation, proximaOS)
+                .then(sucesso => {
+                  if (sucesso) {
+                    mostrarNotificacao(`Rota para a próxima OS: ${proximaOS.description}`, 'info');
+                  }
+                });
+            }
+          }
+        }
+      }, 500);
     }, 300);
   }
   
   // Função para navegar para uma OS específica
   const navegarParaOS = (os: OSPoint) => {
-    navegarParaGoogleMaps(userLocation, { lat: os.lat, lng: os.lng })
+    // Verifica se é para mostrar a rota no mapa primeiro
+    if (modoNavegacao && userLocation && map && routeLayer) {
+      // Exibe a rota visualmente no mapa
+      exibirRotaNoMapa(map, routeLayer, userLocation, os)
+        .then(sucesso => {
+          if (sucesso) {
+            mostrarNotificacao(`Rota para ${os.description} exibida no mapa`, 'info');
+            setOsProxima(os);
+          } else {
+            // Se falhar ao exibir no mapa, abre diretamente no Google Maps
+            navegarParaGoogleMaps(userLocation, { lat: os.lat, lng: os.lng });
+          }
+        })
+        .catch(() => {
+          // Em caso de erro, usa o fallback para o Google Maps
+          navegarParaGoogleMaps(userLocation, { lat: os.lat, lng: os.lng });
+        });
+    } else {
+      // Se não estiver em modo navegação ou não tiver mapa, abre diretamente no Google Maps
+      navegarParaGoogleMaps(userLocation, { lat: os.lat, lng: os.lng });
+    }
+  }
+  
+  // Quando o usuário clica no botão "Iniciar Navegação" na interface
+  const handleIniciarNavegacao = () => {
+    // Se não temos localização, precisamos obter primeiro
+    if (!userLocation) {
+      console.log('Iniciando navegação - solicitando localização primeiro')
+      setUsuarioRespondeuPopup(false)
+      setMostrarPopupLocalizacao(true)
+      return
+    }
+    
+    try {
+      setLoading(true)
+      
+      // Se não tiver ordens carregadas ainda, carrega
+      if (todasOrdens.length === 0) {
+        carregarDados().then(() => {
+          // Configura o modo de navegação e atualiza a próxima OS
+          setModoNavegacao(true)
+          atualizarProximaOS()
+          
+          // NOVA FUNCIONALIDADE: Exibe a rota para a próxima OS
+          setTimeout(() => {
+            if (map && routeLayer && osProxima) {
+              exibirRotaNoMapa(map, routeLayer, userLocation, osProxima)
+                .then(sucesso => {
+                  if (sucesso) {
+                    mostrarNotificacao(`Rota para ${osProxima.description} exibida no mapa`, 'info');
+                  }
+                });
+            }
+          }, 500);
+          
+          setLoading(false)
+        }).catch(error => {
+          console.error('Erro ao carregar dados:', error)
+          setModoNavegacao(false)
+          setLoading(false)
+          mostrarNotificacao('Erro ao iniciar navegação. Tente novamente.', 'erro')
+        })
+      } else {
+        // Se já temos ordens carregadas, apenas inicia a navegação
+        setModoNavegacao(true)
+        atualizarProximaOS()
+        
+        // NOVA FUNCIONALIDADE: Exibe a rota para a próxima OS
+        setTimeout(() => {
+          if (map && routeLayer && osProxima) {
+            exibirRotaNoMapa(map, routeLayer, userLocation, osProxima)
+              .then(sucesso => {
+                if (sucesso) {
+                  mostrarNotificacao(`Rota para ${osProxima.description} exibida no mapa`, 'info');
+                }
+              });
+          }
+        }, 500);
+        
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error('Erro ao iniciar navegação:', error)
+      mostrarNotificacao(error instanceof Error ? error.message : 'Erro ao iniciar navegação', 'erro')
+      setModoNavegacao(false)
+      setLoading(false)
+    }
+  }
+  
+  // Função para atualizar qual é a próxima OS
+  const atualizarProximaOS = () => {
+    console.log("Atualizando próxima OS, ordens atendidas:", ordensAtendidas)
+    const proxima = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas)
+    
+    if (proxima) {
+      console.log("Nova OS próxima encontrada:", proxima.id, proxima.description)
+      setOsProxima(proxima)
+      
+      // NOVA FUNCIONALIDADE: Exibe a rota para a próxima OS se estiver em modo navegação
+      if (modoNavegacao && map && routeLayer && userLocation) {
+        exibirRotaNoMapa(map, routeLayer, userLocation, proxima)
+          .then(sucesso => {
+            if (sucesso) {
+              mostrarNotificacao(`Rota para ${proxima.description} atualizada`, 'info');
+            }
+          });
+      }
+    } else if (ordensAtendidas.length > 0) {
+      // Todas as ordens foram atendidas
+      mostrarNotificacao('Parabéns! Você concluiu todas as ordens de serviço.', 'sucesso')
+      setModoNavegacao(false)
+      setOsProxima(null)
+    }
   }
   
   // Efeito para monitorar a localização durante o modo de navegação
@@ -775,6 +854,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             lng: longitude,
             accuracy
           })
+          
+          // NOVA FUNCIONALIDADE: Atualiza a rota à medida que o usuário se move
+          if (map && routeLayer && osProxima) {
+            // Só atualiza a cada 5 segundos para não sobrecarregar
+            const agora = Date.now();
+            if (!window.ultimaAtualizacaoRota || agora - window.ultimaAtualizacaoRota > 5000) {
+              window.ultimaAtualizacaoRota = agora;
+              
+              exibirRotaNoMapa(map, routeLayer, {
+                lat: latitude,
+                lng: longitude,
+                accuracy
+              }, osProxima);
+            }
+          }
         },
         (error) => {
           console.error('Erro ao monitorar localização:', error.message)
@@ -793,7 +887,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         navigator.geolocation.clearWatch(watchId)
       }
     }
-  }, [modoNavegacao])
+  }, [modoNavegacao, osProxima, map, routeLayer])
   
   // Adiciona event listeners para os eventos personalizados
   useEffect(() => {
