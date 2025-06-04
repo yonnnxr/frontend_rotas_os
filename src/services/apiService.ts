@@ -101,26 +101,114 @@ export const carregarOrdens = async (): Promise<GeoJSONData> => {
 
 // Função para processar os dados GeoJSON e extrair as ordens
 export const processarOrdens = (geojsonData: GeoJSONData): OSPoint[] => {
+  // Validação inicial de segurança
+  if (!geojsonData || !geojsonData.features || !Array.isArray(geojsonData.features)) {
+    console.error('Dados GeoJSON inválidos:', geojsonData);
+    return [];
+  }
+  
+  console.log(`Processando ${geojsonData.features.length} features do GeoJSON`);
+  
   // Filtra apenas os pontos (ordens)
   const orderFeatures = geojsonData.features.filter(feature => 
     feature.geometry && feature.geometry.type === 'Point'
   );
   
+  console.log(`Encontradas ${orderFeatures.length} features do tipo Point`);
+  
+  if (orderFeatures.length > 0) {
+    // Log da primeira feature para debug
+    console.log('Exemplo de feature:', JSON.stringify(orderFeatures[0], null, 2).substring(0, 500));
+    console.log('Propriedades disponíveis:', orderFeatures[0].properties ? Object.keys(orderFeatures[0].properties) : 'Nenhuma propriedade');
+  }
+  
   // Mapeia para o formato de OSPoint
-  return orderFeatures.map(feature => {
-    const coords = feature.geometry.coordinates as number[];
-    const { lat, lng } = corrigirCoordenadas(coords[0], coords[1]);
-    
-    return {
-      lat,
-      lng,
-      order: feature.properties?.route_order || 0,
-      id: feature.properties?.id || feature.properties?.ordem_servico || '',
-      description: feature.properties?.ordem_servico || feature.properties?.nroos || 'OS',
-      feature: feature,
-      status: feature.properties?.situacao || feature.properties?.status || 'Pendente'
-    };
-  });
+  const ordens = orderFeatures.map((feature, index) => {
+    try {
+      if (!feature.geometry || !feature.geometry.coordinates || !Array.isArray(feature.geometry.coordinates)) {
+        console.warn(`Feature #${index} com geometria inválida:`, feature);
+        return null;
+      }
+      
+      const coords = feature.geometry.coordinates as number[];
+      const props = feature.properties || {};
+      
+      // Extração de ID com logs e fallbacks
+      let id = '';
+      if (props.id) {
+        id = String(props.id);
+      } else if (props.ordem_servico) {
+        id = String(props.ordem_servico);
+      } else if (props.nroos) {
+        id = String(props.nroos);
+      } else if (props.os_id) {
+        id = String(props.os_id);
+      } else {
+        // Fallback: usar índice se não tiver ID
+        id = `ordem_${index}`;
+        console.warn(`Feature #${index} sem ID, usando '${id}' como fallback`);
+      }
+      
+      // Corrigir coordenadas (se disponível)
+      const corrigeCoordenadas = (longitude: number, latitude: number) => {
+        try {
+          // Verificar se a função corrigirCoordenadas está disponível
+          if (typeof corrigirCoordenadas === 'function') {
+            return corrigirCoordenadas(longitude, latitude);
+          } else {
+            // Fallback: ajuste para Anastácio/MS (deslocamento de 12 graus para oeste)
+            return { lat: latitude, lng: longitude - 12 };
+          }
+        } catch (error) {
+          console.error(`Erro ao corrigir coordenadas [${longitude}, ${latitude}]:`, error);
+          return { lat: latitude, lng: longitude };
+        }
+      };
+      
+      const { lat, lng } = corrigeCoordenadas(coords[0], coords[1]);
+      
+      // Extrair descrição com fallbacks
+      const description = 
+        props.descricao || 
+        props.ordem_servico || 
+        props.nroos || 
+        props.descricao_servico || 
+        `OS ${index + 1}`;
+      
+      // Extrair status com fallbacks
+      const status = 
+        props.situacao || 
+        props.status || 
+        props.estado || 
+        'Pendente';
+      
+      // Registra o que foi encontrado para debug
+      if (index === 0 || index === orderFeatures.length - 1) {
+        console.log(`OS #${index} processada:`, { id, lat, lng, description, status });
+      }
+      
+      return {
+        lat,
+        lng,
+        order: props.route_order || props.ordem || index + 1,
+        id,
+        description,
+        feature,
+        status
+      };
+    } catch (error) {
+      console.error(`Erro ao processar feature #${index}:`, error);
+      return null;
+    }
+  }).filter(Boolean) as OSPoint[]; // Remove itens nulos
+  
+  console.log(`Processamento concluído: ${ordens.length} ordens válidas extraídas de ${orderFeatures.length} features`);
+  // Log dos primeiros IDs para debug
+  if (ordens.length > 0) {
+    console.log('IDs das primeiras 5 ordens:', ordens.slice(0, 5).map(o => o.id));
+  }
+  
+  return ordens;
 };
 
 // Função para atualizar o status de uma ordem de serviço

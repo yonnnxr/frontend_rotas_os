@@ -271,6 +271,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
     
     console.log(`Exibindo ${geojsonData.features.length} features no mapa`);
+    console.log('Estrutura dos dados GeoJSON:', JSON.stringify(geojsonData.features[0], null, 2).substring(0, 500) + '...');
     
     // Filtra apenas as ordens de serviço (pontos)
     const orderFeatures = geojsonData.features.filter((feature: GeoJSONFeature) => 
@@ -292,9 +293,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     try {
       // Primeiro convertemos o GeoJSON para um formato mais simples
       const ordens = processarOrdens(geojsonData);
-      console.log(`Processadas ${ordens.length} ordens a partir do GeoJSON`);
+      console.log(`Processadas ${ordens.length} ordens a partir do GeoJSON:`, ordens.map(o => ({id: o.id, lat: o.lat, lng: o.lng})));
       
-      // Armazena as ordens processadas no estado
+      // Armazena as ordens processadas no estado - IMPORTANTE: isto deve acontecer ANTES de adicionar os marcadores
       setTodasOrdens(ordens);
       
       // Agora adicionamos os marcadores diretamente usando as coordenadas processadas
@@ -359,6 +360,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <strong>OS:</strong> ${os.description}<br>
                 <strong>Status:</strong> ${ordensAtendidas.includes(os.id) ? 'Concluída' : os.status || 'Pendente'}<br>
                 <strong>Equipe:</strong> ${localStorage.getItem('team_name') || ''}<br>
+                <strong>ID:</strong> ${os.id}<br>
                 
                 <div style="display:flex;gap:5px;margin-top:8px;">
                   ${!ordensAtendidas.includes(os.id) ? `
@@ -482,6 +484,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <strong>OS:</strong> ${ordemServico}<br>
                 <strong>Status:</strong> ${ordensAtendidas.includes(osId) ? 'Concluída' : status}<br>
                 <strong>Equipe:</strong> ${equipe}<br>
+                <strong>ID:</strong> ${osId}<br>
             `;
             
             if (props.route_order) {
@@ -673,61 +676,82 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   
   // Função para marcar uma OS como concluída
   const marcarOSComoConcluida = (id: string) => {
-    if (!id) return
+    if (!id) {
+      console.error('ID da OS não informado');
+      return;
+    }
+    
+    console.log(`Tentando marcar OS ${id} como concluída`);
+    console.log(`Estado atual - total de ordens: ${todasOrdens.length}, ordens atendidas: ${ordensAtendidas.length}`);
+    console.log(`IDs das ordens carregadas: ${todasOrdens.map(os => os.id).join(', ')}`);
     
     // Verificar se a OS já não foi atendida
     if (ordensAtendidas.includes(id)) {
-      mostrarNotificacao('Esta ordem de serviço já foi concluída!', 'info')
-      return
+      console.log(`OS ${id} já foi concluída anteriormente`);
+      mostrarNotificacao('Esta ordem de serviço já foi concluída!', 'info');
+      return;
     }
     
     // Verificar se a OS existe na lista de ordens carregadas
-    const osExiste = todasOrdens.find(os => os.id === id)
+    const osExiste = todasOrdens.find(os => os.id === id);
     if (!osExiste) {
-      mostrarNotificacao('Ordem de serviço não encontrada no sistema!', 'erro')
-      return
+      console.error(`OS ${id} não encontrada na lista de ordens carregadas`);
+      console.log('Lista de IDs disponíveis:', todasOrdens.map(os => os.id));
+      mostrarNotificacao('Ordem de serviço não encontrada no sistema!', 'erro');
+      return;
     }
     
+    console.log(`OS ${id} encontrada, prosseguindo com a conclusão`);
+    
     // Verificar se ainda há OS não atendidas
-    const ordensRestantes = todasOrdens.filter(os => !ordensAtendidas.includes(os.id))
+    const ordensRestantes = todasOrdens.filter(os => !ordensAtendidas.includes(os.id));
+    console.log(`Restam ${ordensRestantes.length} ordens após esta conclusão`);
+    
     if (ordensRestantes.length <= 1) { // A última é a que estamos concluindo agora
+      console.log('Esta é a última OS a ser concluída');
       // Adiciona a OS atual à lista de concluídas
-      setOrdensAtendidas(prev => [...prev, id])
+      setOrdensAtendidas(prev => [...prev, id]);
       
       // Atualiza a visualização no mapa
       if (optimizedRoute) {
-        exibirOrdens(optimizedRoute)
+        exibirOrdens(optimizedRoute);
       }
       
       // Mostra mensagem de conclusão
       setTimeout(() => {
-        mostrarNotificacao('Parabéns! Você concluiu todas as ordens de serviço.', 'sucesso')
-        setModoNavegacao(false)
-        setOsProxima(null)
-      }, 300)
-      return
+        mostrarNotificacao('Parabéns! Você concluiu todas as ordens de serviço.', 'sucesso');
+        setModoNavegacao(false);
+        setOsProxima(null);
+      }, 300);
+      return;
     }
     
     // Adiciona a OS atual à lista de concluídas
-    setOrdensAtendidas(prev => [...prev, id])
+    setOrdensAtendidas(prev => {
+      const novaLista = [...prev, id];
+      console.log(`Nova lista de OSs concluídas: ${novaLista.join(', ')}`);
+      return novaLista;
+    });
     
     // Atualiza a visualização no mapa
     if (optimizedRoute) {
-      exibirOrdens(optimizedRoute)
+      console.log('Atualizando exibição do mapa após marcar OS como concluída');
+      exibirOrdens(optimizedRoute);
     }
     
     // Envia atualização para a API (não bloqueia o fluxo)
     atualizarStatusOS(id, 'Concluída').catch(err => {
-      console.warn('Erro ao atualizar status na API (continuando localmente):', err)
-    })
+      console.warn('Erro ao atualizar status na API (continuando localmente):', err);
+    });
     
     // Mostra confirmação visual
-    mostrarNotificacao('OS concluída com sucesso!', 'sucesso')
+    mostrarNotificacao('OS concluída com sucesso!', 'sucesso');
     
     // Força uma atualização imediata da próxima OS
     setTimeout(() => {
-      atualizarProximaOS()
-    }, 300)
+      console.log('Atualizando próxima OS após conclusão');
+      atualizarProximaOS();
+    }, 300);
   }
   
   // Função para navegar para uma OS específica
