@@ -40,28 +40,64 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [modoNavegacao, setModoNavegacao] = useState(false)
   const [mostrarPopupLocalizacao, setMostrarPopupLocalizacao] = useState(false)
   const [mostrarListaOS, setMostrarListaOS] = useState(false)
+  // Novo estado para rastrear se o usuário já respondeu ao popup de localização
+  const [usuarioRespondeuPopup, setUsuarioRespondeuPopup] = useState(false)
   
-  // Inicializa o componente
+  // Inicializa o componente - Este useEffect só é executado uma vez na montagem
   useEffect(() => {
     // Carregar as ordens no início
     carregarDados()
     
-    // Forçar a exibição do popup de permissão logo após o login
-    // Removendo o timer que pode estar causando problemas
-    setMostrarPopupLocalizacao(true)
+    // Forçar a exibição do popup de permissão logo após o login, apenas se o usuário não respondeu antes
+    if (!usuarioRespondeuPopup) {
+      console.log("Mostrando popup de localização inicial")
+      setMostrarPopupLocalizacao(true)
+    }
+  }, []) // Execute apenas uma vez na montagem
+  
+  // Este useEffect monitora se o usuário tem localização e decide se mostra o popup
+  useEffect(() => {
+    // Se o usuário já respondeu ou já tem localização, não mostramos o popup
+    if (usuarioRespondeuPopup || userLocation) {
+      return
+    }
     
-    // Registramos eventos para mostrar o popup se o usuário ainda não tiver localização
-    const checkLocationTimer = setInterval(() => {
+    console.log("Verificando necessidade de popup de localização")
+    
+    // Só mostramos o popup se:
+    // 1. O usuário não respondeu antes
+    // 2. Não tem localização
+    // 3. Não está em modo navegação
+    if (!modoNavegacao) {
+      setMostrarPopupLocalizacao(true)
+    }
+    
+    // Não usamos setInterval para evitar problemas de temporização
+  }, [userLocation, modoNavegacao, usuarioRespondeuPopup])
+  
+  // Função para garantir que o popup de localização permaneça visível
+  const forcarMostrarPopupLocalizacao = () => {
+    // Mais simples e direto: se não temos localização, mostramos o popup
+    if (!userLocation) {
+      console.log('Forçando exibição do popup de localização')
+      setMostrarPopupLocalizacao(true)
+      // Garantimos que o estado de resposta do usuário seja resetado se ainda não temos localização
+      setUsuarioRespondeuPopup(false)
+    }
+  }
+  
+  // Adicionar um efeito para verificar periodicamente se o popup deve ser exibido
+  useEffect(() => {
+    // Verificamos a cada 3 segundos se o popup deve ser exibido
+    const verificarPopupTimer = setInterval(() => {
+      // Se não temos localização, força exibição do popup
       if (!userLocation) {
-        setMostrarPopupLocalizacao(true)
-      } else {
-        // Se já temos localização, limpar o intervalo
-        clearInterval(checkLocationTimer)
+        forcarMostrarPopupLocalizacao()
       }
     }, 3000)
     
     return () => {
-      clearInterval(checkLocationTimer)
+      clearInterval(verificarPopupTimer)
     }
   }, [userLocation])
   
@@ -392,46 +428,51 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   
   // Função para obter a localização atual do usuário
   const handleObterLocalizacao = () => {
-    setMostrarPopupLocalizacao(false);
-    setLoading(true);
+    // Marcar que o usuário respondeu ao popup
+    setUsuarioRespondeuPopup(true)
+    setMostrarPopupLocalizacao(false)
+    setLoading(true)
     
     obterLocalizacaoUsuario(
       // Callback de sucesso
       (location) => {
-        setUserLocation(location);
+        setUserLocation(location)
         
         // Centraliza o mapa na posição do usuário, com verificação de segurança
         if (map) {
           try {
-            const leafletMap = map as any;
+            const leafletMap = map as any
             if (leafletMap && leafletMap._loaded) {
               // Abordagem mais segura: primeiro definir zoom, depois posição
-              map.setZoom(15, { animate: false });
-              map.panTo([location.lat, location.lng], { animate: false });
+              map.setZoom(15, { animate: false })
+              map.panTo([location.lat, location.lng], { animate: false })
             }
           } catch (e) {
-            console.warn('Erro ao centralizar mapa na posição do usuário:', e);
+            console.warn('Erro ao centralizar mapa na posição do usuário:', e)
           }
         }
         
-        setLoading(false);
+        setLoading(false)
         
-        // Inicia o modo de navegação por proximidade automaticamente
-        iniciarNavegacaoProximidade();
+        // Removido o início automático da navegação por proximidade
+        // Agora o usuário precisa clicar no botão "Iniciar Navegação" explicitamente
+        mostrarNotificacao('Localização obtida com sucesso. Clique em "Iniciar Navegação" para começar.', 'sucesso')
       },
       // Callback de erro
       (errorMessage) => {
         mostrarNotificacao(
           `Não foi possível obter sua localização: ${errorMessage}. Você ainda pode usar o sistema, mas algumas funcionalidades serão limitadas.`,
           'info'
-        );
-        setLoading(false);
+        )
+        setLoading(false)
       }
-    );
+    )
   }
   
   // Função para continuar sem localização
   const handleContinuarSemLocalizacao = () => {
+    // Marcar que o usuário respondeu ao popup
+    setUsuarioRespondeuPopup(true)
     setMostrarPopupLocalizacao(false)
     mostrarNotificacao(
       'Continuando sem compartilhar localização. Você pode solicitar acesso depois clicando em "Iniciar Navegação".',
@@ -443,6 +484,23 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const iniciarNavegacaoProximidade = async () => {
     try {
       setLoading(true)
+      
+      // Verificar se temos a localização do usuário
+      if (!userLocation) {
+        console.log('Usuário tentou iniciar navegação sem localização')
+        // Reseta estados para garantir que o popup seja exibido
+        setUsuarioRespondeuPopup(false)
+        setMostrarPopupLocalizacao(true)
+        
+        // Notifica o usuário sobre a necessidade de permissão
+        mostrarNotificacao(
+          'Para iniciar a navegação, é necessário permitir o acesso à sua localização.',
+          'info'
+        )
+        
+        setLoading(false)
+        return
+      }
       
       // Se não tiver ordens carregadas ainda, carrega
       if (todasOrdens.length === 0) {
@@ -607,9 +665,19 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [todasOrdens, userLocation])
   
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col relative">
+      {/* Popup de permissão de localização - Posicionado no topo da hierarquia para máxima prioridade */}
+      {mostrarPopupLocalizacao && !userLocation && (
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center">
+          <PermissaoLocalizacao
+            onPermitir={handleObterLocalizacao}
+            onNegar={handleContinuarSemLocalizacao}
+          />
+        </div>
+      )}
+      
       {/* Cabeçalho */}
-      <div className="bg-white shadow-md">
+      <div className="bg-white shadow-md relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <h1 className="text-xl font-semibold text-gray-900">Sistema de Ordens de Serviço</h1>
@@ -632,7 +700,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       </div>
       
       {/* Barra de ferramentas */}
-      <div className="bg-gray-100 border-b">
+      <div className="bg-gray-100 border-b relative z-10">
         <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between">
           <div className="flex flex-wrap items-center space-x-2">
             {!modoNavegacao ? (
@@ -727,7 +795,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         
         {/* Loading overlay */}
         {loading && (
-          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-50">
             <div className="p-4 rounded-md bg-white shadow-md text-center">
               <svg className="animate-spin h-8 w-8 mx-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -736,14 +804,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               <p className="mt-2 text-gray-700">Carregando...</p>
             </div>
           </div>
-        )}
-        
-        {/* Modal de permissão de localização */}
-        {mostrarPopupLocalizacao && (
-          <PermissaoLocalizacao
-            onPermitir={handleObterLocalizacao}
-            onNegar={handleContinuarSemLocalizacao}
-          />
         )}
       </div>
     </div>
