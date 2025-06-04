@@ -150,200 +150,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   }
   
-  // Função para exibir as ordens no mapa
-  const exibirOrdens = (geojsonData: GeoJSONData) => {
-    if (!map || !markersLayer) {
-      console.error('Mapa ou camada de marcadores não inicializados');
-      return;
-    }
-    
-    // Limpa apenas os marcadores de ordens, preservando o marcador do usuário
-    markersLayer.eachLayer(layer => {
-      if (!(layer as any)._icon?.classList.contains('user-location-icon')) {
-        markersLayer.removeLayer(layer);
-      }
-    });
-    
-    // Verifica se temos dados para exibir
-    if (!geojsonData?.features?.length) {
-      console.warn('Não há dados GeoJSON para exibir');
-      return;
-    }
-    
-    console.log(`Exibindo ${geojsonData.features.length} features no mapa`);
-    
-    // Filtra apenas as ordens de serviço (pontos)
-    const orderFeatures = geojsonData.features.filter((feature: GeoJSONFeature) => 
-      feature.geometry && feature.geometry.type === 'Point'
-    );
-    
-    console.log(`Encontradas ${orderFeatures.length} ordens de serviço (pontos)`);
-    
-    if (orderFeatures.length === 0) {
-      console.warn('Não há pontos de ordens de serviço para exibir');
-      return;
-    }
-    
-    // Adiciona os pontos ao mapa
-    const points: [number, number][] = [];
-    let marcadoresAdicionados = 0;
-    
-    orderFeatures.forEach((feature: GeoJSONFeature, index: number) => {
-      try {
-        if (!feature.geometry?.coordinates || feature.geometry.coordinates.length < 2) {
-          console.warn(`Feature #${index} sem coordenadas válidas`);
-          return;
-        }
-        
-        // No GeoJSON, o formato é [longitude, latitude]
-        const coords = feature.geometry.coordinates as [number, number];
-        
-        // Correção para Anastácio (deslocamento de 12 graus para oeste)
-        const origLng = coords[0];
-        const origLat = coords[1];
-        const lng = origLng - 12;
-        const lat = origLat;
-        
-        // Validações extras para evitar problemas
-        if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
-          console.warn(`Feature #${index} com coordenadas inválidas: lat=${lat}, lng=${lng}`);
-          return;
-        }
-        
-        // Validação de faixa de coordenadas
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          console.warn(`Feature #${index} com coordenadas fora da faixa: lat=${lat}, lng=${lng}`);
-          return;
-        }
-        
-        // Adiciona à lista de pontos
-        points.push([lat, lng]);
-        
-        // Propriedades do ponto
-        const props = feature.properties || {};
-        const orderNumber = props.route_order || '';
-        
-        // Determina a cor com base na situação
-        let color = '#DC2626'; // Vermelho (pendente)
-        const situacao = (props.situacao || props.status || '').toLowerCase();
-        
-        if (situacao.includes('exec')) {
-          color = '#10B981'; // Verde
-        } else if (situacao.includes('prog')) {
-          color = '#F59E0B'; // Laranja
-        }
-        
-        // Verifica se a ordem já foi atendida localmente
-        const osId = props.id || props.ordem_servico || '';
-        if (ordensAtendidas.includes(osId)) {
-          color = '#10B981'; // Verde (concluída)
-        }
-        
-        // Cria o marcador circular
-        try {
-          const marker = L.circleMarker([lat, lng], {
-            radius: 8,
-            fillColor: color,
-            color: '#fff',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.8
-          }).addTo(markersLayer);
-          
-          // Adiciona o número da ordem, se disponível
-          if (orderNumber) {
-            L.marker([lat, lng], {
-              icon: L.divIcon({
-                className: 'order-number-icon',
-                html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;background-color:white;border:2px solid #1a73e8;border-radius:50%;color:#1a73e8;font-weight:bold;font-size:12px;">${orderNumber}</div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-              })
-            }).addTo(markersLayer);
-          }
-          
-          // Configura o popup com botão para navegação
-          const ordemServico = props.ordem_servico || props.nroos || 'N/A';
-          const status = props.status || props.situacao || 'Pendente';
-          const equipe = props.equipe || props.equipeexec || localStorage.getItem('team_name');
-          
-          let popupContent = `
-            <div>
-              <strong>OS:</strong> ${ordemServico}<br>
-              <strong>Status:</strong> ${ordensAtendidas.includes(osId) ? 'Concluída' : status}<br>
-              <strong>Equipe:</strong> ${equipe}<br>
-          `;
-          
-          if (props.route_order) {
-            popupContent += `<strong>Ordem na Rota:</strong> ${props.route_order}<br>`;
-          }
-          
-          if (props.descgrupo) {
-            popupContent += `<strong>Grupo:</strong> ${props.descgrupo}<br>`;
-          }
-          
-          if (props.logradouro) {
-            popupContent += `<strong>Endereço:</strong> ${props.logradouro}, ${props.num || 'S/N'}`;
-            if (props.bairro) popupContent += `, ${props.bairro}`;
-            popupContent += `<br>`;
-          }
-          
-          if (props.localidade || props.municipio) {
-            popupContent += `<strong>Localidade:</strong> ${props.localidade || props.municipio}<br>`;
-          }
-          
-          // Adiciona botões para navegação e marcar como concluída (se não estiver concluída)
-          if (!ordensAtendidas.includes(osId)) {
-            popupContent += `
-              <div style="display:flex;gap:5px;margin-top:8px;">
-                <button 
-                  onclick="window.dispatchEvent(new CustomEvent('navigate-to-order', {detail: {lat: ${lat}, lng: ${lng}, id: '${osId}'}}));"
-                  style="background-color:#1a73e8;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
-                >
-                  Navegar
-                </button>
-                <button 
-                  onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${osId}'}}));"
-                  style="background-color:#10B981;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
-                >
-                  Concluir
-                </button>
-              </div>
-            `;
-          } else {
-            popupContent += `
-              <div style="margin-top:8px;padding:5px 10px;background-color:#D1FAE5;color:#065F46;border-radius:4px;text-align:center;">
-                ✓ Ordem concluída
-              </div>
-            `;
-          }
-          
-          popupContent += `</div>`;
-          
-          marker.bindPopup(popupContent);
-          marcadoresAdicionados++;
-        } catch (error) {
-          console.error(`Erro ao adicionar marcador para ponto #${index}:`, error);
-        }
-      } catch (error) {
-        console.error(`Erro ao processar ponto #${index}:`, error);
-      }
-    });
-    
-    console.log(`Adicionados ${marcadoresAdicionados} marcadores ao mapa de ${orderFeatures.length} features`);
-    
-    // Ajusta o zoom para mostrar todos os pontos apenas se tivermos pontos válidos
-    if (points.length > 0 && map) {
-      try {
-        const bounds = L.latLngBounds(points);
-        map.fitBounds(bounds, { padding: [50, 50] });
-        console.log('Zoom ajustado para mostrar todos os pontos');
-      } catch (error) {
-        console.error('Erro ao ajustar zoom:', error);
-      }
-    }
-  }
-  
   // Função chamada quando o mapa é inicializado
   const handleMapReady = (
     mapInstance: L.Map, 
@@ -378,7 +184,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 markersLayerInstance && 
                 routeLayerInstance) {
               
-              console.log('Exibindo ordens e rotas no mapa após inicialização');
+              console.log('Exibindo ordens e rotas no mapa após inicialização', optimizedRoute);
+              console.log('Número de features no GeoJSON:', optimizedRoute.features.length);
               
               // Exibe as ordens no mapa com segurança
               exibirOrdens(optimizedRoute);
@@ -402,6 +209,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               setTimeout(() => {
                 try {
                   if (mapInstance && todasOrdens.length > 0) {
+                    console.log('Ajustando zoom para mostrar todas as ordens:', todasOrdens.length);
                     const bounds = L.latLngBounds(todasOrdens.map(os => [os.lat, os.lng]));
                     mapInstance.fitBounds(bounds, { padding: [50, 50] });
                   }
@@ -425,10 +233,327 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             console.warn('Erro ao exibir dados após inicialização do mapa:', e);
           }
         }, 500);
+      } else {
+        console.warn('Não há dados de rota otimizada para exibir após inicialização do mapa');
       }
     }).catch(err => {
       console.error('Erro ao recarregar dados após inicialização do mapa:', err);
     });
+  }
+  
+  // Função para exibir as ordens no mapa
+  const exibirOrdens = (geojsonData: GeoJSONData) => {
+    if (!map || !markersLayer) {
+      console.error('Mapa ou camada de marcadores não inicializados');
+      return;
+    }
+    
+    console.log('Iniciando exibição de ordens no mapa, camada de marcadores:', markersLayer);
+    
+    // Limpa apenas os marcadores de ordens, preservando o marcador do usuário
+    try {
+      let contadorRemovidos = 0;
+      markersLayer.eachLayer(layer => {
+        if (!(layer as any)._icon?.classList.contains('user-location-icon')) {
+          markersLayer.removeLayer(layer);
+          contadorRemovidos++;
+        }
+      });
+      console.log(`Removidos ${contadorRemovidos} marcadores antigos`);
+    } catch (e) {
+      console.error('Erro ao limpar marcadores antigos:', e);
+    }
+    
+    // Verifica se temos dados para exibir
+    if (!geojsonData?.features?.length) {
+      console.warn('Não há dados GeoJSON para exibir');
+      return;
+    }
+    
+    console.log(`Exibindo ${geojsonData.features.length} features no mapa`);
+    
+    // Filtra apenas as ordens de serviço (pontos)
+    const orderFeatures = geojsonData.features.filter((feature: GeoJSONFeature) => 
+      feature.geometry && feature.geometry.type === 'Point'
+    );
+    
+    console.log(`Encontradas ${orderFeatures.length} ordens de serviço (pontos)`);
+    
+    if (orderFeatures.length === 0) {
+      console.warn('Não há pontos de ordens de serviço para exibir');
+      return;
+    }
+    
+    // Adiciona os pontos ao mapa
+    const points: [number, number][] = [];
+    let marcadoresAdicionados = 0;
+    
+    // Tenta uma abordagem diferente para adicionar os marcadores
+    try {
+      // Primeiro convertemos o GeoJSON para um formato mais simples
+      const ordens = processarOrdens(geojsonData);
+      console.log(`Processadas ${ordens.length} ordens a partir do GeoJSON`);
+      
+      // Armazena as ordens processadas no estado
+      setTodasOrdens(ordens);
+      
+      // Agora adicionamos os marcadores diretamente usando as coordenadas processadas
+      ordens.forEach((os, index) => {
+        try {
+          // Validações extras
+          if (isNaN(os.lat) || isNaN(os.lng) || !isFinite(os.lat) || !isFinite(os.lng)) {
+            console.warn(`Ordem #${index} (${os.id}) com coordenadas inválidas: lat=${os.lat}, lng=${os.lng}`);
+            return;
+          }
+          
+          // Validação de faixa de coordenadas
+          if (os.lat < -90 || os.lat > 90 || os.lng < -180 || os.lng > 180) {
+            console.warn(`Ordem #${index} (${os.id}) com coordenadas fora da faixa: lat=${os.lat}, lng=${os.lng}`);
+            return;
+          }
+          
+          // Adiciona à lista de pontos para ajustar o zoom depois
+          points.push([os.lat, os.lng]);
+          
+          // Determina a cor com base na situação
+          let color = '#DC2626'; // Vermelho (pendente)
+          const situacao = (os.status || '').toLowerCase();
+          
+          if (situacao.includes('exec')) {
+            color = '#10B981'; // Verde
+          } else if (situacao.includes('prog')) {
+            color = '#F59E0B'; // Laranja
+          }
+          
+          // Verifica se a ordem já foi atendida localmente
+          if (ordensAtendidas.includes(os.id)) {
+            color = '#10B981'; // Verde (concluída)
+          }
+          
+          // Cria o marcador circular
+          try {
+            const marker = L.circleMarker([os.lat, os.lng], {
+              radius: 8,
+              fillColor: color,
+              color: '#fff',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.8
+            }).addTo(markersLayer);
+            
+            // Adiciona o número da ordem, se disponível
+            if (os.order) {
+              L.marker([os.lat, os.lng], {
+                icon: L.divIcon({
+                  className: 'order-number-icon',
+                  html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;background-color:white;border:2px solid #1a73e8;border-radius:50%;color:#1a73e8;font-weight:bold;font-size:12px;">${os.order}</div>`,
+                  iconSize: [20, 20],
+                  iconAnchor: [10, 10]
+                })
+              }).addTo(markersLayer);
+            }
+            
+            // Configura o popup com botão para navegação
+            const popupContent = `
+              <div>
+                <strong>OS:</strong> ${os.description}<br>
+                <strong>Status:</strong> ${ordensAtendidas.includes(os.id) ? 'Concluída' : os.status || 'Pendente'}<br>
+                <strong>Equipe:</strong> ${localStorage.getItem('team_name') || ''}<br>
+                
+                <div style="display:flex;gap:5px;margin-top:8px;">
+                  ${!ordensAtendidas.includes(os.id) ? `
+                    <button 
+                      onclick="window.dispatchEvent(new CustomEvent('navigate-to-order', {detail: {lat: ${os.lat}, lng: ${os.lng}, id: '${os.id}'}}));"
+                      style="background-color:#1a73e8;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
+                    >
+                      Navegar
+                    </button>
+                    <button 
+                      onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${os.id}'}}));"
+                      style="background-color:#10B981;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
+                    >
+                      Concluir
+                    </button>
+                  ` : `
+                    <div style="margin-top:8px;padding:5px 10px;background-color:#D1FAE5;color:#065F46;border-radius:4px;text-align:center;width:100%;">
+                      ✓ Ordem concluída
+                    </div>
+                  `}
+                </div>
+              </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            marcadoresAdicionados++;
+          } catch (error) {
+            console.error(`Erro ao adicionar marcador para ordem #${index} (${os.id}):`, error);
+          }
+        } catch (error) {
+          console.error(`Erro ao processar ordem #${index}:`, error);
+        }
+      });
+      
+      console.log(`Adicionados ${marcadoresAdicionados} marcadores ao mapa a partir de ${ordens.length} ordens`);
+    } catch (e) {
+      console.error('Erro crítico ao adicionar marcadores:', e);
+      
+      // Mantém o código original como fallback
+      orderFeatures.forEach((feature: GeoJSONFeature, index: number) => {
+        try {
+          if (!feature.geometry?.coordinates || feature.geometry.coordinates.length < 2) {
+            console.warn(`Feature #${index} sem coordenadas válidas`);
+            return;
+          }
+          
+          // No GeoJSON, o formato é [longitude, latitude]
+          const coords = feature.geometry.coordinates as [number, number];
+          
+          // Correção para Anastácio (deslocamento de 12 graus para oeste)
+          const origLng = coords[0];
+          const origLat = coords[1];
+          const lng = origLng - 12;
+          const lat = origLat;
+          
+          // Validações extras para evitar problemas
+          if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
+            console.warn(`Feature #${index} com coordenadas inválidas: lat=${lat}, lng=${lng}`);
+            return;
+          }
+          
+          // Validação de faixa de coordenadas
+          if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            console.warn(`Feature #${index} com coordenadas fora da faixa: lat=${lat}, lng=${lng}`);
+            return;
+          }
+          
+          // Adiciona à lista de pontos
+          points.push([lat, lng]);
+          
+          // Propriedades do ponto
+          const props = feature.properties || {};
+          const orderNumber = props.route_order || '';
+          
+          // Determina a cor com base na situação
+          let color = '#DC2626'; // Vermelho (pendente)
+          const situacao = (props.situacao || props.status || '').toLowerCase();
+          
+          if (situacao.includes('exec')) {
+            color = '#10B981'; // Verde
+          } else if (situacao.includes('prog')) {
+            color = '#F59E0B'; // Laranja
+          }
+          
+          // Verifica se a ordem já foi atendida localmente
+          const osId = props.id || props.ordem_servico || '';
+          if (ordensAtendidas.includes(osId)) {
+            color = '#10B981'; // Verde (concluída)
+          }
+          
+          // Cria o marcador circular
+          try {
+            const marker = L.circleMarker([lat, lng], {
+              radius: 8,
+              fillColor: color,
+              color: '#fff',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.8
+            }).addTo(markersLayer);
+            
+            // Adiciona o número da ordem, se disponível
+            if (orderNumber) {
+              L.marker([lat, lng], {
+                icon: L.divIcon({
+                  className: 'order-number-icon',
+                  html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;background-color:white;border:2px solid #1a73e8;border-radius:50%;color:#1a73e8;font-weight:bold;font-size:12px;">${orderNumber}</div>`,
+                  iconSize: [20, 20],
+                  iconAnchor: [10, 10]
+                })
+              }).addTo(markersLayer);
+            }
+            
+            // Configura o popup com botão para navegação
+            const ordemServico = props.ordem_servico || props.nroos || 'N/A';
+            const status = props.status || props.situacao || 'Pendente';
+            const equipe = props.equipe || props.equipeexec || localStorage.getItem('team_name');
+            
+            let popupContent = `
+              <div>
+                <strong>OS:</strong> ${ordemServico}<br>
+                <strong>Status:</strong> ${ordensAtendidas.includes(osId) ? 'Concluída' : status}<br>
+                <strong>Equipe:</strong> ${equipe}<br>
+            `;
+            
+            if (props.route_order) {
+              popupContent += `<strong>Ordem na Rota:</strong> ${props.route_order}<br>`;
+            }
+            
+            if (props.descgrupo) {
+              popupContent += `<strong>Grupo:</strong> ${props.descgrupo}<br>`;
+            }
+            
+            if (props.logradouro) {
+              popupContent += `<strong>Endereço:</strong> ${props.logradouro}, ${props.num || 'S/N'}`;
+              if (props.bairro) popupContent += `, ${props.bairro}`;
+              popupContent += `<br>`;
+            }
+            
+            if (props.localidade || props.municipio) {
+              popupContent += `<strong>Localidade:</strong> ${props.localidade || props.municipio}<br>`;
+            }
+            
+            // Adiciona botões para navegação e marcar como concluída (se não estiver concluída)
+            if (!ordensAtendidas.includes(osId)) {
+              popupContent += `
+                <div style="display:flex;gap:5px;margin-top:8px;">
+                  <button 
+                    onclick="window.dispatchEvent(new CustomEvent('navigate-to-order', {detail: {lat: ${lat}, lng: ${lng}, id: '${osId}'}}));"
+                    style="background-color:#1a73e8;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
+                  >
+                    Navegar
+                  </button>
+                  <button 
+                    onclick="window.dispatchEvent(new CustomEvent('os-concluida', {detail: {id: '${osId}'}}));"
+                    style="background-color:#10B981;color:white;border:none;border-radius:4px;padding:5px 10px;cursor:pointer;flex:1;"
+                  >
+                    Concluir
+                  </button>
+                </div>
+              `;
+            } else {
+              popupContent += `
+                <div style="margin-top:8px;padding:5px 10px;background-color:#D1FAE5;color:#065F46;border-radius:4px;text-align:center;">
+                  ✓ Ordem concluída
+                </div>
+              `;
+            }
+            
+            popupContent += `</div>`;
+            
+            marker.bindPopup(popupContent);
+            marcadoresAdicionados++;
+          } catch (error) {
+            console.error(`Erro ao adicionar marcador para ponto #${index}:`, error);
+          }
+        } catch (error) {
+          console.error(`Erro ao processar ponto #${index}:`, error);
+        }
+      });
+    }
+    
+    console.log(`Total: Adicionados ${marcadoresAdicionados} marcadores ao mapa de ${orderFeatures.length} features`);
+    
+    // Ajusta o zoom para mostrar todos os pontos apenas se tivermos pontos válidos
+    if (points.length > 0 && map) {
+      try {
+        console.log(`Ajustando zoom para mostrar ${points.length} pontos`);
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [50, 50] });
+        console.log('Zoom ajustado para mostrar todos os pontos');
+      } catch (error) {
+        console.error('Erro ao ajustar zoom:', error);
+      }
+    }
   }
   
   // Função para obter a localização atual do usuário
