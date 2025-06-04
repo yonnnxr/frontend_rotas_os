@@ -48,6 +48,38 @@ export const obterLocalizacaoUsuario = (
   onError: (error: string) => void
 ): void => {
   if ('geolocation' in navigator) {
+    // Verifica permissões do navegador primeiro (se a API de permissões estiver disponível)
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then(permissionStatus => {
+          if (permissionStatus.state === 'denied') {
+            onError('Permissão de localização negada. Por favor, ative a localização nas configurações do seu navegador.');
+            return;
+          }
+          
+          // Se não foi negada, tenta obter a localização
+          obterPosicao();
+        })
+        .catch(() => {
+          // Se não conseguir verificar a permissão, tenta obter a localização diretamente
+          obterPosicao();
+        });
+    } else {
+      // Se a API de permissões não estiver disponível, tenta obter a localização diretamente
+      obterPosicao();
+    }
+  } else {
+    onError('Geolocalização não é suportada pelo seu navegador');
+  }
+  
+  // Função interna para obter a posição
+  function obterPosicao() {
+    const geoOptions = {
+      enableHighAccuracy: true,
+      timeout: 15000, // Aumentado para 15 segundos
+      maximumAge: 0
+    };
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
@@ -58,17 +90,27 @@ export const obterLocalizacaoUsuario = (
         });
       },
       (error) => {
-        console.error('Erro ao obter localização:', error.message);
-        onError(error.message);
+        console.error('Erro ao obter localização:', error);
+        
+        // Mensagens de erro mais amigáveis
+        let mensagem = 'Não foi possível obter sua localização.';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            mensagem = 'Você negou a permissão de localização. Por favor, ative a localização nas configurações do seu navegador.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            mensagem = 'Informações de localização indisponíveis. Verifique se o GPS está ativado.';
+            break;
+          case error.TIMEOUT:
+            mensagem = 'A solicitação de localização expirou. Verifique sua conexão e tente novamente.';
+            break;
+        }
+        
+        onError(mensagem);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
+      geoOptions
     );
-  } else {
-    onError('Geolocalização não é suportada pelo seu navegador');
   }
 };
 
