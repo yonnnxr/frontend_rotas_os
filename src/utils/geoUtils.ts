@@ -47,70 +47,112 @@ export const obterLocalizacaoUsuario = (
   callback: (location: UserLocation) => void, 
   onError: (error: string) => void
 ): void => {
-  if ('geolocation' in navigator) {
-    // Verifica permissões do navegador primeiro (se a API de permissões estiver disponível)
-    if ('permissions' in navigator) {
-      navigator.permissions.query({ name: 'geolocation' as PermissionName })
-        .then(permissionStatus => {
-          if (permissionStatus.state === 'denied') {
-            onError('Permissão de localização negada. Por favor, ative a localização nas configurações do seu navegador.');
-            return;
-          }
-          
-          // Se não foi negada, tenta obter a localização
-          obterPosicao();
-        })
-        .catch(() => {
-          // Se não conseguir verificar a permissão, tenta obter a localização diretamente
-          obterPosicao();
-        });
-    } else {
-      // Se a API de permissões não estiver disponível, tenta obter a localização diretamente
-      obterPosicao();
-    }
-  } else {
+  // Log para debug em produção e desenvolvimento
+  console.log('[GeoUtils] Iniciando solicitação de geolocalização');
+  
+  if (!navigator || !navigator.geolocation) {
+    console.error('[GeoUtils] API de geolocalização não disponível');
     onError('Geolocalização não é suportada pelo seu navegador');
+    return;
   }
   
-  // Função interna para obter a posição
-  function obterPosicao() {
+  // Função para obter a posição com tratamento de erros robusto
+  const obterPosicao = () => {
+    console.log('[GeoUtils] Chamando getCurrentPosition');
+    
     const geoOptions = {
       enableHighAccuracy: true,
-      timeout: 15000, // Aumentado para 15 segundos
+      timeout: 20000, // Aumentado para 20 segundos
       maximumAge: 0
     };
     
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        callback({
-          lat: latitude,
-          lng: longitude,
-          accuracy
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('[GeoUtils] Localização obtida com sucesso');
+          const { latitude, longitude, accuracy } = position.coords;
+          
+          // Validação extra das coordenadas
+          if (isNaN(latitude) || isNaN(longitude) || !isFinite(latitude) || !isFinite(longitude)) {
+            console.error('[GeoUtils] Coordenadas inválidas recebidas', { latitude, longitude });
+            onError('Coordenadas de localização inválidas recebidas do dispositivo');
+            return;
+          }
+          
+          callback({
+            lat: latitude,
+            lng: longitude,
+            accuracy: accuracy || 0
+          });
+        },
+        (error) => {
+          console.error('[GeoUtils] Erro ao obter localização:', error);
+          
+          // Mensagens de erro mais amigáveis
+          let mensagem = 'Não foi possível obter sua localização.';
+          
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              mensagem = 'Permissão de localização negada. Por favor, ative a localização nas configurações do seu navegador e recarregue a página.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              mensagem = 'Informações de localização indisponíveis. Verifique se o GPS do dispositivo está ativado.';
+              break;
+            case error.TIMEOUT:
+              mensagem = 'A solicitação de localização expirou. Verifique sua conexão de internet e tente novamente.';
+              break;
+          }
+          
+          onError(mensagem);
+        },
+        geoOptions
+      );
+    } catch (e) {
+      console.error('[GeoUtils] Exceção ao solicitar geolocalização:', e);
+      onError('Erro inesperado ao solicitar localização. Por favor, recarregue a página e tente novamente.');
+    }
+  };
+  
+  // Estratégia melhorada para verificar permissões
+  if ('permissions' in navigator && navigator.permissions && navigator.permissions.query) {
+    try {
+      console.log('[GeoUtils] Verificando permissões via API de Permissions');
+      
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then(permissionStatus => {
+          console.log('[GeoUtils] Estado da permissão:', permissionStatus.state);
+          
+          if (permissionStatus.state === 'denied') {
+            onError('Permissão de localização negada pelo navegador. Por favor, ative a localização nas configurações do seu navegador e recarregue a página.');
+            return;
+          }
+          
+          // Mesmo se for "prompt", vamos tentar obter a localização
+          obterPosicao();
+          
+          // Configura listener para mudanças no estado da permissão
+          permissionStatus.addEventListener('change', function() {
+            console.log('[GeoUtils] Estado da permissão alterado para:', this.state);
+            if (this.state === 'granted') {
+              // Se o usuário acabou de conceder a permissão, tenta novamente
+              obterPosicao();
+            }
+          });
+        })
+        .catch(err => {
+          console.error('[GeoUtils] Erro ao verificar permissões:', err);
+          // Se falhar a verificação de permissão, tenta obter a localização diretamente
+          obterPosicao();
         });
-      },
-      (error) => {
-        console.error('Erro ao obter localização:', error);
-        
-        // Mensagens de erro mais amigáveis
-        let mensagem = 'Não foi possível obter sua localização.';
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            mensagem = 'Você negou a permissão de localização. Por favor, ative a localização nas configurações do seu navegador.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            mensagem = 'Informações de localização indisponíveis. Verifique se o GPS está ativado.';
-            break;
-          case error.TIMEOUT:
-            mensagem = 'A solicitação de localização expirou. Verifique sua conexão e tente novamente.';
-            break;
-        }
-        
-        onError(mensagem);
-      },
-      geoOptions
-    );
+    } catch (e) {
+      console.error('[GeoUtils] Exceção ao verificar permissões:', e);
+      // Se houver qualquer erro na API de permissões, tenta obter a localização diretamente
+      obterPosicao();
+    }
+  } else {
+    console.log('[GeoUtils] API de Permissions não disponível, solicitando localização diretamente');
+    // Se a API de permissões não estiver disponível, tenta obter a localização diretamente
+    obterPosicao();
   }
 };
 
