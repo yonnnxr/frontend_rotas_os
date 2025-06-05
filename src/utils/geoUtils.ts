@@ -17,29 +17,28 @@ export const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2
 export const encontrarOSMaisProxima = (
   userLocation: UserLocation | null, 
   todasOrdens: OSPoint[], 
-  ordensAtendidas: string[]
+  ordensAtendidas: string[],
+  statusOrdens: Record<string, string> = {}
 ): OSPoint | null => {
   if (!userLocation || todasOrdens.length === 0) return null;
   
-  // Filtra ordens que ainda não foram atendidas e que não estão com status "Concluída"
+  // Filtra ordens que ainda não foram atendidas e que não estão marcadas como concluídas no app
   const ordensNaoAtendidas = todasOrdens.filter(os => {
     // Verifica se a ordem não está na lista de atendidas
     const naoAtendida = !ordensAtendidas.includes(os.id);
     
-    // Verifica se o status não é "Concluída", independente de maiúsculas/minúsculas
-    const statusNaoConcluido = !(os.status && 
-      (os.status.toLowerCase() === 'concluída' || 
-       os.status.toLowerCase() === 'concluida' ||
-       os.status.toLowerCase() === 'finalizada' ||
-       os.status.toLowerCase() === 'atendida'));
+    // Verifica se o status interno não é "CONCLUIDA_APP"
+    const statusInternoNaoConcluido = statusOrdens[os.id] !== 'CONCLUIDA_APP';
     
     // A ordem só é válida se ambas as condições forem verdadeiras
-    return naoAtendida && statusNaoConcluido;
+    return naoAtendida && statusInternoNaoConcluido;
   });
   
   console.log(`Filtrando ordens não atendidas: ${todasOrdens.length} total -> ${ordensNaoAtendidas.length} disponíveis`);
+  console.log(`Status interno das ordens:`, statusOrdens);
   
   if (ordensNaoAtendidas.length === 0) {
+    console.log("Nenhuma OS disponível: todas foram concluídas internamente ou estão na lista de atendidas");
     return null; // Todas as ordens foram atendidas ou estão concluídas
   }
   
@@ -54,7 +53,7 @@ export const encontrarOSMaisProxima = (
     (prev.distanceFromUser || Infinity) < (current.distanceFromUser || Infinity) ? prev : current
   );
   
-  console.log(`OS mais próxima encontrada: ${osMaisProxima.id} - ${osMaisProxima.description} (Status: ${osMaisProxima.status || 'Não definido'})`);
+  console.log(`OS mais próxima encontrada: ${osMaisProxima.id} - ${osMaisProxima.description} (Status interno: ${statusOrdens[osMaisProxima.id] || 'Não definido'})`);
   
   return osMaisProxima;
 };

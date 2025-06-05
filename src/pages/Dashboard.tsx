@@ -43,6 +43,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [osProxima, setOsProxima] = useState<OSPoint | null>(null)
   const [todasOrdens, setTodasOrdens] = useState<OSPoint[]>([])
   const [ordensAtendidas, setOrdensAtendidas] = useState<string[]>([])
+  const [statusOrdens, setStatusOrdens] = useState<Record<string, string>>({})
   const [modoNavegacao, setModoNavegacao] = useState(false)
   const [mostrarPopupLocalizacao, setMostrarPopupLocalizacao] = useState(false)
   const [mostrarListaOS, setMostrarListaOS] = useState(false)
@@ -663,6 +664,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         )
       );
       
+      // Atualiza o status interno da ordem
+      setStatusOrdens(prev => ({
+        ...prev,
+        [id]: 'CONCLUIDA_APP'
+      }));
+      
       // Atualiza a visualização no mapa
       if (optimizedRoute) {
         exibirOrdens(optimizedRoute);
@@ -691,6 +698,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       )
     );
     
+    // Atualiza o status interno da ordem
+    setStatusOrdens(prev => ({
+      ...prev,
+      [id]: 'CONCLUIDA_APP'
+    }));
+    
     // Atualiza a visualização no mapa
     if (optimizedRoute) {
       console.log('Atualizando exibição do mapa após marcar OS como concluída');
@@ -713,7 +726,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       // Busca a próxima OS mais próxima após a atualização
       setTimeout(() => {
         if (userLocation) {
-          const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas);
+          const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas, statusOrdens);
           
           if (proximaOS) {
             console.log('Navegando automaticamente para a próxima OS:', proximaOS.id);
@@ -833,7 +846,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   // Função para atualizar qual é a próxima OS
   const atualizarProximaOS = () => {
     console.log("Atualizando próxima OS, ordens atendidas:", ordensAtendidas)
-    const proxima = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas)
+    console.log("Status interno das ordens:", statusOrdens)
+    const proxima = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas, statusOrdens)
     
     if (proxima) {
       console.log("Nova OS próxima encontrada:", proxima.id, proxima.description)
