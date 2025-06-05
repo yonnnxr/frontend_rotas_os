@@ -43,22 +43,39 @@ const OSList: React.FC<OSListProps> = ({
   
   if (ordensSorted.length === 0) {
     return (
-      <div className="p-4 text-center text-gray-500">
-        Nenhuma ordem de serviço disponível
+      <div className="p-6 flex flex-col items-center justify-center text-gray-500 h-full">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <p className="text-lg font-medium">Nenhuma ordem de serviço disponível</p>
+        <p className="text-sm mt-1">As ordens aparecerão aqui quando estiverem disponíveis</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="px-4 py-3 border-b bg-gray-50">
-        <h3 className="text-lg font-medium">Ordens de Serviço</h3>
-        <p className="text-sm text-gray-500">
-          {ordensSorted.length} ordens | {ordensAtendidas.length} concluídas
-        </p>
+    <div className="h-full flex flex-col bg-white rounded-lg shadow overflow-hidden">
+      <div className="px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-blue-100">
+        <h3 className="text-lg font-medium text-blue-900 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Ordens de Serviço
+        </h3>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-sm text-blue-800 font-medium">
+            {ordensSorted.length} ordens no total
+          </p>
+          <div className="flex items-center text-sm">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-800">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+              {ordensAtendidas.length} concluídas
+            </span>
+          </div>
+        </div>
       </div>
       
-      <div className="max-h-[60vh] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {ordensSorted.map(os => {
           const isAtendida = ordensAtendidas.includes(os.id);
           const isProxima = os.id === osProximaId;
@@ -73,7 +90,7 @@ const OSList: React.FC<OSListProps> = ({
           return (
             <div 
               key={os.id}
-              className={`px-4 py-3 border-b flex items-center ${
+              className={`px-4 py-3 border-b flex items-center transition-colors hover:bg-gray-50 ${
                 isAtendida ? 'bg-green-50' : isProxima ? 'bg-blue-50' : ''
               }`}
             >
@@ -90,11 +107,23 @@ const OSList: React.FC<OSListProps> = ({
                   </p>
                 </div>
                 
-                {distanceText && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    {isProxima ? '🎯 ' : ''}{distanceText}
-                  </p>
-                )}
+                <div className="flex items-center mt-1 text-sm">
+                  <div className="flex items-center text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className={isProxima ? 'text-blue-600 font-medium' : ''}>
+                      {isProxima ? '📍 ' : ''}{distanceText || 'Distância indisponível'}
+                    </span>
+                  </div>
+                  
+                  <span className="mx-2 text-gray-300">|</span>
+                  
+                  <div className="text-gray-500 text-sm">
+                    <span className="font-medium">ID:</span> {os.id.substring(0, 8)}...
+                  </div>
+                </div>
               </div>
               
               <div className="flex space-x-2 ml-2">
@@ -102,20 +131,30 @@ const OSList: React.FC<OSListProps> = ({
                   <>
                     <button
                       onClick={() => onSelectOS(os)}
-                      className="px-2 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors flex items-center shadow-sm"
                     >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
                       Navegar
                     </button>
                     <button
                       onClick={() => onConcluirOS(os.id)}
-                      className="px-2 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                      className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors flex items-center shadow-sm"
                     >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
                       Concluir
                     </button>
                   </>
                 )}
                 {isAtendida && (
-                  <span className="px-2 py-1 bg-green-100 text-green-800 text-sm rounded">
+                  <span className="px-3 py-1.5 bg-green-100 text-green-800 text-sm rounded-md flex items-center shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
                     Concluída
                   </span>
                 )}

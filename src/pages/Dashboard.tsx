@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import ReactDOM from 'react-dom'
+import Spinner from '../components/Spinner'
 
 // Componentes
 import MapView from '../components/MapView'
@@ -964,21 +965,34 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       )}
       
       {/* Cabeçalho */}
-      <div className="bg-white shadow-md relative z-10">
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 shadow-lg relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <h1 className="text-xl font-semibold text-gray-900">Sistema de Ordens de Serviço</h1>
             <div className="flex items-center">
-              <span className="mr-4 text-sm text-gray-600">
-                {stats.ordersCount} ordens de serviço
-                {modoNavegacao && ordensAtendidas.length > 0 && (
-                  <span className="ml-2 text-green-600">({ordensAtendidas.length} concluídas)</span>
-                )}
-              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              <h1 className="text-xl font-semibold text-white">Sistema de Ordens de Serviço</h1>
+            </div>
+            <div className="flex items-center">
+              <div className="mr-4 px-3 py-1.5 bg-blue-800 rounded-md text-sm text-white flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <span>
+                  {stats.ordersCount} ordens
+                  {modoNavegacao && ordensAtendidas.length > 0 && (
+                    <span className="ml-1 text-green-300">({ordensAtendidas.length} concluídas)</span>
+                  )}
+                </span>
+              </div>
               <button
                 onClick={onLogout}
-                className="ml-4 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center shadow-sm"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 Sair
               </button>
             </div>
@@ -987,17 +1001,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       </div>
       
       {/* Barra de ferramentas */}
-      <div className="bg-gray-100 border-b relative z-10">
-        <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between">
+      <div className="bg-white border-b shadow-sm relative z-10">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between">
           <div className="flex flex-wrap items-center space-x-2">
             {!modoNavegacao ? (
               <>
                 <button
                   onClick={handleIniciarNavegacao}
                   disabled={loading}
-                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors shadow-sm"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Iniciar Navegação
@@ -1008,10 +1022,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 {osProxima ? (
                   <button
                     onClick={() => navegarParaOS(osProxima)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors shadow-sm"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     Navegar para {osProxima.description}
                   </button>
@@ -1024,9 +1039,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     setOsProxima(null)
                     carregarDados()
                   }}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors shadow-sm"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                   Encerrar Navegação
@@ -1036,9 +1051,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             
             <button
               onClick={() => setMostrarListaOS(!mostrarListaOS)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
+              className={`${mostrarListaOS ? 'bg-blue-700' : 'bg-blue-600'} hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors shadow-sm`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
               {mostrarListaOS ? 'Ocultar Lista' : 'Ver Lista'}
@@ -1046,8 +1061,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </div>
           
           {optimizedRoute && stats.routeDistance > 0 && (
-            <div className="text-sm text-gray-700 font-medium">
-              Rota: {stats.routeDistance.toFixed(1)} km ({stats.routeDuration.toFixed(0)} min)
+            <div className="px-3 py-1.5 bg-gray-100 rounded-md text-sm text-gray-700 font-medium flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              Rota: <span className="ml-1 text-blue-700">{stats.routeDistance.toFixed(1)} km</span> <span className="mx-1">•</span> <span className="text-blue-700">{stats.routeDuration.toFixed(0)} min</span>
             </div>
           )}
         </div>
@@ -1082,15 +1100,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         
         {/* Loading overlay */}
         {loading && (
-          <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
-            <div className="p-4 rounded-md bg-white shadow-md text-center">
-              <svg className="animate-spin h-8 w-8 mx-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="mt-2 text-gray-700">Carregando...</p>
-            </div>
-          </div>
+          <Spinner 
+            fullScreen 
+            withBackdrop 
+            size="lg" 
+            label="Carregando..." 
+          />
         )}
       </div>
     </div>
