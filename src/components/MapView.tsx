@@ -313,6 +313,53 @@ const MapView: React.FC<MapViewProps> = ({
     };
   }, [todasOrdens, onOSClick]);
   
+  // Adiciona listener para focar na próxima OS após marcar uma como concluída
+  useEffect(() => {
+    const handleFocarProximaOS = (e: CustomEvent<{ id: string }>) => {
+      // Verifica se existe o mapa e a camada de marcadores
+      if (!mapInstanceRef.current || !markersLayerRef.current || !isMountedRef.current) return;
+      
+      console.log('Evento focar-proxima-os recebido para OS:', e.detail.id);
+      
+      try {
+        // Tenta encontrar o marcador da próxima OS
+        const markersLayer = markersLayerRef.current;
+        const map = mapInstanceRef.current;
+        
+        // Vamos buscar o marcador de forma mais segura
+        let encontrado = false;
+        
+        markersLayer.eachLayer((layer) => {
+          // Verifica se é um marcador com o ícone correto
+          const layerAny = layer as any;
+          if (layerAny._icon?.classList.contains('os-proxima-icon')) {
+            // Verifica se o layer é um marker com os métodos necessários
+            if (typeof layerAny.getLatLng === 'function' && typeof layerAny.openPopup === 'function') {
+              // É seguro usar os métodos
+              const latLng = layerAny.getLatLng();
+              map.setView(latLng, 15, { animate: true });
+              layerAny.openPopup();
+              encontrado = true;
+              console.log('Centralizado no marcador da próxima OS com coordenadas:', latLng);
+            }
+          }
+        });
+        
+        if (!encontrado) {
+          console.warn('Marcador da próxima OS não encontrado ou não é um marker válido');
+        }
+      } catch (err) {
+        console.error('Erro ao centralizar mapa na próxima OS:', err);
+      }
+    };
+    
+    window.addEventListener('focar-proxima-os', handleFocarProximaOS as EventListener);
+    
+    return () => {
+      window.removeEventListener('focar-proxima-os', handleFocarProximaOS as EventListener);
+    };
+  }, []);
+  
   return (
     <div ref={mapRef} className="h-full w-full"></div>
   );

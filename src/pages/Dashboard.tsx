@@ -656,6 +656,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       // Adiciona a OS atual à lista de concluídas
       setOrdensAtendidas(prev => [...prev, id]);
       
+      // Atualiza o status da OS localmente
+      setTodasOrdens(prev => 
+        prev.map(os => 
+          os.id === id ? { ...os, status: 'Concluída' } : os
+        )
+      );
+      
       // Atualiza a visualização no mapa
       if (optimizedRoute) {
         exibirOrdens(optimizedRoute);
@@ -677,6 +684,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       return novaLista;
     });
     
+    // Atualiza o status da OS localmente
+    setTodasOrdens(prev => 
+      prev.map(os => 
+        os.id === id ? { ...os, status: 'Concluída' } : os
+      )
+    );
+    
     // Atualiza a visualização no mapa
     if (optimizedRoute) {
       console.log('Atualizando exibição do mapa após marcar OS como concluída');
@@ -696,10 +710,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       console.log('Atualizando próxima OS após conclusão');
       atualizarProximaOS();
       
-      // NOVA FUNCIONALIDADE: Navegação automática para a próxima OS mais próxima
+      // Busca a próxima OS mais próxima após a atualização
       setTimeout(() => {
-        if (modoNavegacao && userLocation) {
-          // Busca a próxima OS mais próxima após a atualização
+        if (userLocation) {
           const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas);
           
           if (proximaOS) {
@@ -711,13 +724,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               exibirRotaNoMapa(map, routeLayer, userLocation, proximaOS)
                 .then(sucesso => {
                   if (sucesso) {
-                    mostrarNotificacao(`Rota para a próxima OS: ${proximaOS.description}`, 'info');
+                    mostrarNotificacao(`Próxima OS: ${proximaOS.description}`, 'info');
+                    
+                    // Dispara um evento personalizado para focar no marcador da próxima OS
+                    window.dispatchEvent(new CustomEvent('focar-proxima-os', {
+                      detail: { id: proximaOS.id }
+                    }));
                   }
                 });
             }
           }
         }
-      }, 500);
+      }, 300);
     }, 300);
   }
   
@@ -892,25 +910,26 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   // Adiciona event listeners para os eventos personalizados
   useEffect(() => {
     const handleOSConcluida = (e: CustomEvent<{ id: string }>) => {
-      marcarOSComoConcluida(e.detail.id)
-    }
+      console.log('Evento os-concluida recebido para OS:', e.detail.id);
+      marcarOSComoConcluida(e.detail.id);
+    };
     
     const handleNavegarParaOS = (e: CustomEvent<{ lat: number, lng: number, id: string }>) => {
       const os = todasOrdens.find(o => o.id === e.detail.id) || {
         lat: e.detail.lat,
         lng: e.detail.lng
-      }
-      navegarParaGoogleMaps(userLocation, os)
-    }
+      };
+      navegarParaGoogleMaps(userLocation, os);
+    };
     
-    window.addEventListener('os-concluida', handleOSConcluida as EventListener)
-    window.addEventListener('navigate-to-order', handleNavegarParaOS as EventListener)
+    window.addEventListener('os-concluida', handleOSConcluida as EventListener);
+    window.addEventListener('navigate-to-order', handleNavegarParaOS as EventListener);
     
     return () => {
-      window.removeEventListener('os-concluida', handleOSConcluida as EventListener)
-      window.removeEventListener('navigate-to-order', handleNavegarParaOS as EventListener)
-    }
-  }, [todasOrdens, userLocation])
+      window.removeEventListener('os-concluida', handleOSConcluida as EventListener);
+      window.removeEventListener('navigate-to-order', handleNavegarParaOS as EventListener);
+    };
+  }, [todasOrdens, userLocation, ordensAtendidas]);
   
   return (
     <div className="h-screen flex flex-col relative">
