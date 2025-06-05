@@ -13,7 +13,7 @@ import { GeoJSONData, UserLocation, OSPoint, GeoJSONFeature } from '../types'
 
 // Serviços e utilitários
 import { carregarOrdens, processarOrdens, atualizarStatusOS, ApiError } from '../services/apiService'
-import { encontrarOSMaisProxima, obterLocalizacaoUsuario } from '../utils/geoUtils'
+import { encontrarOSMaisProxima, obterLocalizacaoUsuario, calcularDistancia } from '../utils/geoUtils'
 import { 
   navegarParaGoogleMaps, 
   exibirRota, 
@@ -652,57 +652,27 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     const ordensRestantes = todasOrdens.filter(os => !ordensAtendidas.includes(os.id));
     console.log(`Restam ${ordensRestantes.length} ordens após esta conclusão`);
     
-    if (ordensRestantes.length <= 1) { // A última é a que estamos concluindo agora
-      console.log('Esta é a última OS a ser concluída');
-      // Adiciona a OS atual à lista de concluídas
-      setOrdensAtendidas(prev => [...prev, id]);
-      
-      // Atualiza o status da OS localmente
-      setTodasOrdens(prev => 
-        prev.map(os => 
-          os.id === id ? { ...os, status: 'Concluída' } : os
-        )
-      );
-      
-      // Atualiza o status interno da ordem
-      setStatusOrdens(prev => ({
-        ...prev,
-        [id]: 'CONCLUIDA_APP'
-      }));
-      
-      // Atualiza a visualização no mapa
-      if (optimizedRoute) {
-        exibirOrdens(optimizedRoute);
-      }
-      
-      // Mostra mensagem de conclusão
-      setTimeout(() => {
-        mostrarNotificacao('Parabéns! Você concluiu todas as ordens de serviço.', 'sucesso');
-        setModoNavegacao(false);
-        setOsProxima(null);
-      }, 300);
-      return;
-    }
+    // Atualizamos o estado da OS
+    const novaListaAtendidas = [...ordensAtendidas, id];
+    console.log("Nova lista de ordens atendidas:", novaListaAtendidas);
     
-    // Adiciona a OS atual à lista de concluídas
-    setOrdensAtendidas(prev => {
-      const novaLista = [...prev, id];
-      console.log(`Nova lista de OSs concluídas: ${novaLista.join(', ')}`);
-      return novaLista;
-    });
+    // Atualiza o status interno da ordem
+    const novosStatus = {
+      ...statusOrdens,
+      [id]: 'CONCLUIDA_APP'
+    };
+    console.log("Novos status internos:", novosStatus);
     
-    // Atualiza o status da OS localmente
+    // Primeiro atualizamos os estados
+    setStatusOrdens(novosStatus);
+    setOrdensAtendidas(novaListaAtendidas);
+    
+    // Atualiza o status da OS localmente também
     setTodasOrdens(prev => 
       prev.map(os => 
         os.id === id ? { ...os, status: 'Concluída' } : os
       )
     );
-    
-    // Atualiza o status interno da ordem
-    setStatusOrdens(prev => ({
-      ...prev,
-      [id]: 'CONCLUIDA_APP'
-    }));
     
     // Atualiza a visualização no mapa
     if (optimizedRoute) {
@@ -721,12 +691,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     // Força uma atualização imediata da próxima OS
     setTimeout(() => {
       console.log('Atualizando próxima OS após conclusão');
+      // Log para diagnóstico antes da atualização
+      console.log("Antes de atualizarProximaOS - ordensAtendidas:", ordensAtendidas);
+      console.log("Antes de atualizarProximaOS - statusOrdens:", statusOrdens);
+      
       atualizarProximaOS();
       
       // Busca a próxima OS mais próxima após a atualização
       setTimeout(() => {
         if (userLocation) {
-          const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas, statusOrdens);
+          // Log para diagnóstico antes de encontrar próxima OS
+          console.log("Antes de encontrarOSMaisProxima - ordensAtendidas:", ordensAtendidas);
+          console.log("Antes de encontrarOSMaisProxima - statusOrdens:", statusOrdens);
+          
+          const proximaOS = encontrarOSMaisProxima(userLocation, todasOrdens, novaListaAtendidas, novosStatus);
           
           if (proximaOS) {
             console.log('Navegando automaticamente para a próxima OS:', proximaOS.id);
@@ -746,6 +724,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   }
                 });
             }
+          } else {
+            console.log("Nenhuma próxima OS disponível após a conclusão.");
+            mostrarNotificacao('Todas as ordens de serviço foram concluídas!', 'sucesso');
           }
         }
       }, 300);
@@ -847,10 +828,61 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const atualizarProximaOS = () => {
     console.log("Atualizando próxima OS, ordens atendidas:", ordensAtendidas)
     console.log("Status interno das ordens:", statusOrdens)
+    
+    // Para depuração - lista todas as ordens e seus status
+    console.log("Lista detalhada de todas as ordens:")
+    todasOrdens.forEach(os => {
+      console.log(`OS ${os.id}: Status original=${os.status || 'Não definido'}, Status interno=${statusOrdens[os.id] || 'Não definido'}, Atendida=${ordensAtendidas.includes(os.id)}`)
+    });
+    
     const proxima = encontrarOSMaisProxima(userLocation, todasOrdens, ordensAtendidas, statusOrdens)
     
     if (proxima) {
-      console.log("Nova OS próxima encontrada:", proxima.id, proxima.description)
+      console.log("Nova OS próxima encontrada:", proxima.id, proxima.description, 
+                 `(Status original=${proxima.status}, Status interno=${statusOrdens[proxima.id] || 'Não definido'})`)
+      
+      // Verifica novamente se a OS não deveria estar marcada como concluída
+      if (ordensAtendidas.includes(proxima.id) || statusOrdens[proxima.id] === 'CONCLUIDA_APP') {
+        console.warn(`AVISO: A OS ${proxima.id} parece estar marcada como concluída mas foi selecionada como próxima. Tentando encontrar outra OS.`);
+        
+        // Tenta encontrar outra OS que definitivamente não esteja concluída
+        const osDisponíveis = todasOrdens.filter(os => 
+          !ordensAtendidas.includes(os.id) && 
+          statusOrdens[os.id] !== 'CONCLUIDA_APP'
+        );
+        
+        if (osDisponíveis.length > 0) {
+          // Ordena por distância e pega a mais próxima
+          if (userLocation) {
+            const comDistancia = osDisponíveis.map(os => ({
+              ...os,
+              dist: calcularDistancia(userLocation.lat, userLocation.lng, os.lat, os.lng)
+            }));
+            
+            const maisPróxima = comDistancia.sort((a, b) => a.dist - b.dist)[0];
+            console.log(`Usando OS alternativa: ${maisPróxima.id} - ${maisPróxima.description}`);
+            setOsProxima(maisPróxima);
+            
+            // Exibe rota para a OS alternativa
+            if (modoNavegacao && map && routeLayer) {
+              exibirRotaNoMapa(map, routeLayer, userLocation, maisPróxima)
+                .then(sucesso => {
+                  if (sucesso) {
+                    mostrarNotificacao(`Rota para ${maisPróxima.description} atualizada`, 'info');
+                  }
+                });
+            }
+            return;
+          }
+        } else {
+          console.log("Não há mais ordens disponíveis para atendimento");
+          setOsProxima(null);
+          mostrarNotificacao('Todas as ordens de serviço foram concluídas!', 'sucesso');
+          return;
+        }
+      }
+      
+      // Se chegou aqui, usa a OS encontrada
       setOsProxima(proxima)
       
       // NOVA FUNCIONALIDADE: Exibe a rota para a próxima OS se estiver em modo navegação

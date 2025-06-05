@@ -20,27 +20,44 @@ export const encontrarOSMaisProxima = (
   ordensAtendidas: string[],
   statusOrdens: Record<string, string> = {}
 ): OSPoint | null => {
-  if (!userLocation || todasOrdens.length === 0) return null;
+  if (!userLocation || todasOrdens.length === 0) {
+    console.log("Sem localização do usuário ou lista de ordens vazia");
+    return null;
+  }
+  
+  console.log(`Buscando próxima OS - total ordens: ${todasOrdens.length}, atendidas: ${ordensAtendidas.length}, com status interno: ${Object.keys(statusOrdens).length}`);
   
   // Filtra ordens que ainda não foram atendidas e que não estão marcadas como concluídas no app
   const ordensNaoAtendidas = todasOrdens.filter(os => {
+    // Verificações de segurança
+    if (!os || !os.id) {
+      console.warn("Ordem inválida encontrada na lista:", os);
+      return false;
+    }
+    
     // Verifica se a ordem não está na lista de atendidas
     const naoAtendida = !ordensAtendidas.includes(os.id);
     
     // Verifica se o status interno não é "CONCLUIDA_APP"
     const statusInternoNaoConcluido = statusOrdens[os.id] !== 'CONCLUIDA_APP';
     
+    // Log detalhado para depuração
+    console.log(`Verificando OS ${os.id}: naoAtendida=${naoAtendida}, statusInternoNaoConcluido=${statusInternoNaoConcluido}, status original=${os.status || 'Não definido'}`);
+    
     // A ordem só é válida se ambas as condições forem verdadeiras
     return naoAtendida && statusInternoNaoConcluido;
   });
   
   console.log(`Filtrando ordens não atendidas: ${todasOrdens.length} total -> ${ordensNaoAtendidas.length} disponíveis`);
-  console.log(`Status interno das ordens:`, statusOrdens);
   
+  // Se não houver ordens disponíveis, retorna null
   if (ordensNaoAtendidas.length === 0) {
     console.log("Nenhuma OS disponível: todas foram concluídas internamente ou estão na lista de atendidas");
     return null; // Todas as ordens foram atendidas ou estão concluídas
   }
+  
+  // IDs das ordens disponíveis para log
+  console.log(`IDs das ordens disponíveis: ${ordensNaoAtendidas.map(os => os.id).join(', ')}`);
   
   // Calcula a distância de cada ordem até o usuário
   const ordensComDistancia = ordensNaoAtendidas.map(os => ({
@@ -48,14 +65,29 @@ export const encontrarOSMaisProxima = (
     distanceFromUser: calcularDistancia(userLocation.lat, userLocation.lng, os.lat, os.lng)
   }));
   
-  // Encontra a ordem mais próxima
-  const osMaisProxima = ordensComDistancia.reduce((prev, current) => 
-    (prev.distanceFromUser || Infinity) < (current.distanceFromUser || Infinity) ? prev : current
+  // Ordenar ordens por distância (da mais próxima para a mais distante)
+  const ordensPorDistancia = [...ordensComDistancia].sort((a, b) => 
+    (a.distanceFromUser || Infinity) - (b.distanceFromUser || Infinity)
   );
   
-  console.log(`OS mais próxima encontrada: ${osMaisProxima.id} - ${osMaisProxima.description} (Status interno: ${statusOrdens[osMaisProxima.id] || 'Não definido'})`);
+  // Log das 3 ordens mais próximas
+  if (ordensPorDistancia.length > 0) {
+    console.log("Ordens mais próximas (top 3):");
+    ordensPorDistancia.slice(0, Math.min(3, ordensPorDistancia.length)).forEach((os, index) => {
+      console.log(`${index + 1}. OS ${os.id} - Distância: ${os.distanceFromUser?.toFixed(2)}km - Status: ${os.status || 'Não definido'}`);
+    });
+  }
   
-  return osMaisProxima;
+  // Pega a ordem mais próxima
+  const osMaisProxima = ordensPorDistancia[0];
+  
+  if (osMaisProxima) {
+    console.log(`OS mais próxima encontrada: ${osMaisProxima.id} - ${osMaisProxima.description} (Status interno: ${statusOrdens[osMaisProxima.id] || 'Não definido'})`);
+    return osMaisProxima;
+  } else {
+    console.log("Nenhuma OS mais próxima encontrada, mesmo após filtragem");
+    return null;
+  }
 };
 
 // Função para obter a localização atual do usuário
