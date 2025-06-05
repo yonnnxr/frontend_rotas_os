@@ -190,9 +190,7 @@ const MapView: React.FC<MapViewProps> = ({
       // Adiciona um marcador destacado para a próxima OS
       const proximaIcon = L.divIcon({
         className: 'os-proxima-icon',
-        html: `<div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background-color:#FF3B30;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);color:white;font-weight:bold;">
-                 <span style="font-size:18px;">→</span>
-               </div>`,
+        html: `<div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background-color:#FF3B30;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);color:white;font-weight:bold;"></div>`,
         iconSize: [36, 36],
         iconAnchor: [18, 18]
       });

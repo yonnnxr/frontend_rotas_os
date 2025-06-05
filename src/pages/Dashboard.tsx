@@ -348,18 +348,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               fillOpacity: 0.8
             }).addTo(markersLayer);
             
-            // Adiciona o número da ordem, se disponível
-            if (os.order) {
-              L.marker([os.lat, os.lng], {
-                icon: L.divIcon({
-                  className: 'order-number-icon',
-                  html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;background-color:white;border:2px solid #1a73e8;border-radius:50%;color:#1a73e8;font-weight:bold;font-size:12px;">${os.order}</div>`,
-                  iconSize: [20, 20],
-                  iconAnchor: [10, 10]
-                })
-              }).addTo(markersLayer);
-            }
-            
             // Configura o popup com botão para navegação
             const popupContent = `
               <div>
@@ -439,7 +427,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           
           // Propriedades do ponto
           const props = feature.properties || {};
-          const orderNumber = props.route_order || '';
           
           // Determina a cor com base na situação
           let color = '#DC2626'; // Vermelho (pendente)
@@ -467,18 +454,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               opacity: 1,
               fillOpacity: 0.8
             }).addTo(markersLayer);
-            
-            // Adiciona o número da ordem, se disponível
-            if (orderNumber) {
-              L.marker([lat, lng], {
-                icon: L.divIcon({
-                  className: 'order-number-icon',
-                  html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;background-color:white;border:2px solid #1a73e8;border-radius:50%;color:#1a73e8;font-weight:bold;font-size:12px;">${orderNumber}</div>`,
-                  iconSize: [20, 20],
-                  iconAnchor: [10, 10]
-                })
-              }).addTo(markersLayer);
-            }
             
             // Configura o popup com botão para navegação
             const ordemServico = props.ordem_servico || props.nroos || 'N/A';
