@@ -953,6 +953,49 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     };
   }, [todasOrdens, userLocation, ordensAtendidas]);
   
+  // Botão para solicitar permissão de localização
+  const solicitarPermissaoLocalizacao = () => {
+    if (!navigator.geolocation) {
+      alert('Seu navegador não suporta geolocalização!');
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const novaLoc = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+        
+        console.log('Permissão concedida, nova localização:', novaLoc);
+        localStorage.setItem('locationPermissionGranted', 'true');
+        setUserLocation(novaLoc);
+        
+        // Exibe mensagem de sucesso
+        mostrarNotificacao('Localização obtida com sucesso!', 'success');
+      },
+      (error) => {
+        console.error('Erro ao obter localização:', error);
+        localStorage.setItem('locationPermissionGranted', 'false');
+        
+        // Se a permissão foi negada, redireciona para a página de permissão
+        if (error.code === 1) { // PERMISSION_DENIED
+          if (confirm('É necessário permitir acesso à localização. Deseja ir para a página de permissão?')) {
+            window.location.href = '/location-permission.html';
+          }
+        } else {
+          mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col relative">
       {/* Popup de permissão de localização - Renderizado FORA da hierarquia normal do DOM */}
@@ -975,26 +1018,39 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               <h1 className="text-xl font-semibold text-white">Sistema de Ordens de Serviço</h1>
             </div>
             <div className="flex items-center">
-              <div className="mr-4 px-3 py-1.5 bg-blue-800 rounded-md text-sm text-white flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                <span>
-                  {stats.ordersCount} ordens
-                  {modoNavegacao && ordensAtendidas.length > 0 && (
-                    <span className="ml-1 text-green-300">({ordensAtendidas.length} concluídas)</span>
-                  )}
-                </span>
-              </div>
-              <button
-                onClick={onLogout}
-                className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center shadow-sm"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Sair
-              </button>
+                          <div className="mr-4 px-3 py-1.5 bg-blue-800 rounded-md text-sm text-white flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span>
+                {stats.ordersCount} ordens
+                {modoNavegacao && ordensAtendidas.length > 0 && (
+                  <span className="ml-1 text-green-300">({ordensAtendidas.length} concluídas)</span>
+                )}
+              </span>
+            </div>
+            
+            {/* Botão para ativar/atualizar localização */}
+            <button
+              onClick={solicitarPermissaoLocalizacao}
+              className="mr-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {userLocation ? 'Atualizar GPS' : 'Ativar GPS'}
+            </button>
+            
+            <button
+              onClick={onLogout}
+              className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sair
+            </button>
             </div>
           </div>
         </div>

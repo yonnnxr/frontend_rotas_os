@@ -29,6 +29,55 @@ const MapView: React.FC<MapViewProps> = ({
   const [isMapMounted, setIsMapMounted] = useState(false);
   const isMountedRef = useRef(true);
   
+  // Estado para controlar a solicitação de permissão
+  const [locationPermissionRequested, setLocationPermissionRequested] = useState(false);
+  
+  // Solicitar permissão de localização explicitamente ao montar o componente
+  useEffect(() => {
+    // Função para verificar e solicitar permissão
+    const checkAndRequestPermission = () => {
+      // Se já solicitamos ou não estamos em um browser, não faz nada
+      if (locationPermissionRequested || typeof navigator === 'undefined' || !navigator.geolocation) {
+        return;
+      }
+      
+      console.log('Solicitando permissão de localização explicitamente...');
+      
+      // Solicita a localização para provocar o prompt de permissão
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('Permissão de localização concedida:', position.coords);
+          localStorage.setItem('locationPermissionGranted', 'true');
+          setLocationPermissionRequested(true);
+        },
+        (error) => {
+          console.warn('Erro ao obter permissão de localização:', error);
+          localStorage.setItem('locationPermissionGranted', 'false');
+          setLocationPermissionRequested(true);
+          
+          // Se a permissão foi negada, redireciona para a página de permissão
+          if (error.code === 1) { // PERMISSION_DENIED
+            window.location.href = '/location-permission.html';
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    };
+    
+    // Executa a verificação após um pequeno delay
+    const timer = setTimeout(() => {
+      checkAndRequestPermission();
+    }, 1000);
+    
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [locationPermissionRequested]);
+  
   // Inicializa o mapa apenas uma vez e mantém referência
   useEffect(() => {
     // Definimos este ref para controlar o ciclo de vida do componente
@@ -87,6 +136,19 @@ const MapView: React.FC<MapViewProps> = ({
         if (newMap && newMarkersLayer && newRouteLayer && isMountedRef.current) {
           // Notificamos o componente pai
           onMapReady(newMap, newMarkersLayer, newRouteLayer);
+          
+          // Quando o mapa estiver pronto, tentamos solicitar a permissão de localização
+          if (!locationPermissionRequested) {
+            setLocationPermissionRequested(true);
+            // Se o navegador suportar, solicita localização para ativar o prompt
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                () => console.log('Permissão concedida após mapa pronto'),
+                (error) => console.warn('Erro ao obter localização após mapa pronto:', error),
+                { enableHighAccuracy: true }
+              );
+            }
+          }
         }
       };
       
@@ -164,6 +226,11 @@ const MapView: React.FC<MapViewProps> = ({
       // Adiciona o novo marcador
       const newMarker = L.marker([lat, lng], { icon: userIcon }).addTo(markersLayer);
       newMarker.bindPopup('Sua localização atual');
+      
+      // Centraliza o mapa na localização do usuário se for a primeira vez
+      if (!mapInstanceRef.current.getBounds().contains([lat, lng])) {
+        mapInstanceRef.current.setView([lat, lng], 14, { animate: true });
+      }
     } catch (err) {
       console.warn('Erro ao atualizar marcador de usuário:', err);
     }

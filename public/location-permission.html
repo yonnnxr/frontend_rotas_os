@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Permissão de Localização</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            background-color: #f5f7fa;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            color: #0066cc;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 20px;
+            line-height: 1.5;
+            color: #333;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .error {
+            color: #F44336;
+            font-weight: bold;
+        }
+        .location-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e9f5ff;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Permissão de Localização</h1>
+        <p>Para o funcionamento correto do aplicativo, precisamos que você conceda permissão para acessar sua localização.</p>
+        
+        <p>Isso permitirá mostrar as ordens de serviço mais próximas e calcular rotas otimizadas.</p>
+        
+        <button id="requestPermission">Permitir Acesso à Localização</button>
+        <p id="status"></p>
+        
+        <div id="locationInfo" class="location-info">
+            <p>Sua localização atual:</p>
+            <p id="coordinates"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const requestButton = document.getElementById('requestPermission');
+            const statusText = document.getElementById('status');
+            const locationInfo = document.getElementById('locationInfo');
+            const coordinatesText = document.getElementById('coordinates');
+            
+            // Função para solicitar permissão e obter localização
+            function requestLocationPermission() {
+                if (!navigator.geolocation) {
+                    statusText.textContent = 'Geolocalização não é suportada pelo seu navegador';
+                    statusText.className = 'error';
+                    return;
+                }
+                
+                // Adiciona mensagem de carregamento
+                statusText.textContent = 'Solicitando permissão...';
+                
+                // Solicita a localização atual
+                navigator.geolocation.getCurrentPosition(
+                    // Sucesso
+                    function(position) {
+                        statusText.textContent = 'Permissão concedida com sucesso!';
+                        statusText.className = 'success';
+                        
+                        // Exibe as coordenadas
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+                        coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
+                        locationInfo.style.display = 'block';
+                        
+                        // Inicia o monitoramento contínuo da localização
+                        startWatchingLocation();
+                        
+                        // Armazena no localStorage que a permissão foi concedida
+                        localStorage.setItem('locationPermissionGranted', 'true');
+                        
+                        // Redireciona para a página principal após 3 segundos
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 3000);
+                    },
+                    // Erro
+                    function(error) {
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                statusText.textContent = 'Permissão negada pelo usuário.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                statusText.textContent = 'Informação de localização indisponível.';
+                                break;
+                            case error.TIMEOUT:
+                                statusText.textContent = 'Tempo esgotado ao obter localização.';
+                                break;
+                            default:
+                                statusText.textContent = 'Erro desconhecido ao obter localização.';
+                        }
+                        statusText.className = 'error';
+                        
+                        // Armazena no localStorage que a permissão foi negada
+                        localStorage.setItem('locationPermissionGranted', 'false');
+                    },
+                    // Opções
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+            
+            // Função para iniciar o monitoramento contínuo da localização
+            function startWatchingLocation() {
+                navigator.geolocation.watchPosition(
+                    function(position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+                        coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
+                    },
+                    function(error) {
+                        console.error('Erro ao monitorar localização:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+            
+            // Adiciona evento ao botão
+            requestButton.addEventListener('click', requestLocationPermission);
+            
+            // Verifica se o usuário já concedeu permissão anteriormente
+            if (localStorage.getItem('locationPermissionGranted') === 'true') {
+                statusText.textContent = 'Permissão já concedida anteriormente.';
+                statusText.className = 'success';
+                
+                // Tenta obter a localização atual novamente
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+                        coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
+                        locationInfo.style.display = 'block';
+                        
+                        // Inicia o monitoramento contínuo
+                        startWatchingLocation();
+                        
+                        // Redireciona para a página principal após 2 segundos
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 2000);
+                    },
+                    function(error) {
+                        console.error('Erro ao recuperar localização:', error);
+                        statusText.textContent = 'Erro ao recuperar localização. Por favor, tente novamente.';
+                        statusText.className = 'error';
+                    }
+                );
+            }
+            
+            // Solicita automaticamente após 1 segundo
+            setTimeout(function() {
+                if (localStorage.getItem('locationPermissionGranted') !== 'true') {
+                    requestLocationPermission();
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
