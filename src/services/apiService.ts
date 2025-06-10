@@ -1,5 +1,6 @@
 import { GeoJSONData, OSPoint } from '../types';
 import { corrigirCoordenadas } from '../utils/geoUtils';
+import * as offlineStorage from './offlineStorage';
 
 // Classe para erros de API
 export class ApiError extends Error {
@@ -56,6 +57,23 @@ export const verificarToken = async (): Promise<boolean> => {
 // Função para carregar as ordens de serviço
 export const carregarOrdens = async (): Promise<GeoJSONData> => {
   try {
+    // Verificar se há uma versão em cache no IndexedDB
+    const cachedData = await offlineStorage.getUserData('cached_geojson');
+    
+    // Se estiver offline, usa o cache (se disponível)
+    if (!offlineStorage.isOnline()) {
+      console.log('Dispositivo offline. Carregando ordens do cache local.');
+      
+      if (cachedData) {
+        console.log('Dados encontrados no cache local.');
+        return cachedData;
+      } else {
+        console.warn('Sem dados em cache e sem conexão com a internet.');
+        throw new ApiError('Sem conexão com a internet e sem dados em cache', 503);
+      }
+    }
+    
+    // Se estiver online, tenta buscar do servidor
     const teamId = localStorage.getItem('team_id');
     
     if (!teamId) {
@@ -80,14 +98,35 @@ export const carregarOrdens = async (): Promise<GeoJSONData> => {
       });
       
       if (fallbackResponse.ok) {
-        return await fallbackResponse.json();
+        const data = await fallbackResponse.json();
+        // Salva no cache
+        await offlineStorage.saveUserData('cached_geojson', data);
+        return data;
+      }
+      
+      // Se falhou, mas tem cache, usa o cache
+      if (cachedData) {
+        console.log('Falha ao carregar do servidor. Usando dados em cache.');
+        return cachedData;
       }
       
       throw new ApiError(`Erro ao carregar ordens: ${response.status}`, response.status);
     }
     
-    return await response.json();
+    const data = await response.json();
+    
+    // Salva no cache para uso offline
+    await offlineStorage.saveUserData('cached_geojson', data);
+    
+    return data;
   } catch (error) {
+    // Verifica se há cache disponível como fallback
+    const cachedData = await offlineStorage.getUserData('cached_geojson');
+    if (cachedData) {
+      console.log('Erro ao carregar do servidor. Usando dados em cache como fallback.');
+      return cachedData;
+    }
+    
     if (error instanceof ApiError) {
       throw error;
     }
@@ -213,6 +252,32 @@ export const processarOrdens = (geojsonData: GeoJSONData): OSPoint[] => {
 
 // Função para atualizar o status de uma ordem de serviço
 export const atualizarStatusOS = async (osId: string, novoStatus: string): Promise<void> => {
+  // Verificar se está online
+  if (!offlineStorage.isOnline()) {
+    console.log(`Dispositivo offline. Salvando atualização de status da OS ${osId} para sincronização posterior.`);
+    
+    // Salvar a ação para sincronização posterior
+    await offlineStorage.registerSyncAction({
+      type: 'UPDATE_STATUS',
+      data: {
+        osId,
+        status: novoStatus,
+        token: localStorage.getItem('token'),
+        teamId: localStorage.getItem('team_id'),
+        timestamp: Date.now()
+      }
+    });
+    
+    // Armazenar localmente para atualização da UI
+    const ordensCompletadas = await offlineStorage.getAllData<{osId: string}>(offlineStorage.STORES.COMPLETED_ORDERS);
+    if (!ordensCompletadas.some(os => os.osId === osId)) {
+      await offlineStorage.saveData(offlineStorage.STORES.COMPLETED_ORDERS, { osId, status: novoStatus });
+    }
+    
+    return;
+  }
+  
+  // Se estiver online, continua com o fluxo normal
   try {
     const teamId = localStorage.getItem('team_id');
     
@@ -235,8 +300,36 @@ export const atualizarStatusOS = async (osId: string, novoStatus: string): Promi
     if (!response.ok) {
       throw new ApiError(`Erro ao atualizar status: ${response.status}`, response.status);
     }
+    
+    // Também armazena no IndexedDB para consistência
+    const ordensCompletadas = await offlineStorage.getAllData<{osId: string}>(offlineStorage.STORES.COMPLETED_ORDERS);
+    if (!ordensCompletadas.some(os => os.osId === osId)) {
+      await offlineStorage.saveData(offlineStorage.STORES.COMPLETED_ORDERS, { osId, status: novoStatus });
+    }
   } catch (error) {
     console.error('Erro ao atualizar status da OS:', error);
-    // Não propaga o erro, apenas loga (atualização de status não é crítica)
+    
+    // Em caso de falha na rede, salva para sincronização posterior
+    await offlineStorage.registerSyncAction({
+      type: 'UPDATE_STATUS',
+      data: {
+        osId,
+        status: novoStatus,
+        token: localStorage.getItem('token'),
+        teamId: localStorage.getItem('team_id'),
+        timestamp: Date.now()
+      }
+    });
+  }
+};
+
+// Função para carregar ordens de serviço completas do armazenamento local
+export const carregarOrdensCompletas = async (): Promise<string[]> => {
+  try {
+    const ordensCompletadas = await offlineStorage.getAllData<{osId: string}>(offlineStorage.STORES.COMPLETED_ORDERS);
+    return ordensCompletadas.map(os => os.osId);
+  } catch (error) {
+    console.error('Erro ao carregar ordens completas do armazenamento local:', error);
+    return [];
   }
 }; 

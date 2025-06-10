@@ -1,0 +1,40 @@
+{
+  "packageId": "com.otimizador.rotas",
+  "host": "localhost:3000",
+  "name": "Otimizador de Rotas OS",
+  "launcherName": "Rotas OS",
+  "display": "standalone",
+  "themeColor": "#4a90e2",
+  "navigationColor": "#4a90e2",
+  "navigationColorDark": "#4a90e2",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": true,
+  "shortcuts": [],
+  "webManifestUrl": "http://localhost:3000/manifest.json",
+  "iconUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\icon.png",
+  "maskableIconUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\adaptive-icon.png",
+  "splashScreenUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\splash.png",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "http://localhost:3000",
+  "minSdkVersion": 19,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1
+}
