@@ -977,11 +977,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               setUserLocation(novaLoc);
               
               // Exibe mensagem de sucesso
-              mostrarNotificacao('Localização obtida com sucesso!', 'success');
+              mostrarNotificacao('Localização obtida com sucesso!', 'sucesso');
             },
             (error) => {
               console.error('Erro ao obter localização:', error);
-              mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
+              mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'erro');
             },
             {
               enableHighAccuracy: true,
@@ -996,7 +996,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           
           // Se a permissão for negada, oferecemos abrir as configurações
           if (confirm('É necessário permitir acesso à localização. Deseja abrir as configurações do aplicativo?')) {
-            window.CordovaBridge.Permissions.openAppSettings();
+            // Verificamos se a ponte existe para evitar erros de TypeScript
+            if (window.CordovaBridge) {
+              window.CordovaBridge.Permissions.openAppSettings();
+            }
           }
         });
     } else {
@@ -1019,7 +1022,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           setUserLocation(novaLoc);
           
           // Exibe mensagem de sucesso
-          mostrarNotificacao('Localização obtida com sucesso!', 'success');
+          mostrarNotificacao('Localização obtida com sucesso!', 'sucesso');
         },
         (error) => {
           console.error('Erro ao obter localização:', error);
@@ -1031,7 +1034,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               window.location.href = '/location-permission.html';
             }
           } else {
-            mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
+            mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'erro');
           }
         },
         {
