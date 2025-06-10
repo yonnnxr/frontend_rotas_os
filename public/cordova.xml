@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Configurações básicas -->
+    <name>Sistema de Ordens de Serviço</name>
+    <description>Aplicativo para gerenciamento de ordens de serviço</description>
+    <author email="contato@sistema.com" href="https://www.sistema.com">Sistema</author>
+    
+    <!-- Configurações de permissões -->
+    <preference name="permissions" value="none"/>
+    
+    <!-- Permissões específicas -->
+    <feature name="Geolocation">
+        <param name="android-package" value="org.apache.cordova.geolocation.GeoBroker" />
+    </feature>
+    
+    <!-- Permissões no Android -->
+    <platform name="android">
+        <config-file target="AndroidManifest.xml" parent="/*">
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+            <uses-feature android:name="android.hardware.location.gps" />
+        </config-file>
+    </platform>
+    
+    <!-- Plugins necessários -->
+    <plugin name="cordova-plugin-geolocation" spec="^4.1.0" />
+    <plugin name="cordova-plugin-permissions" spec="^1.0.0" />
+</widget> 

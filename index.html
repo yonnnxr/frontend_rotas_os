@@ -10,12 +10,24 @@
     <title>Sistema de Ordens de Serviço</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Adiciona metatags para forçar permissões -->
+    <meta http-equiv="permissions-policy" content="geolocation=*, camera=*">
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- Carrega nosso script de ponte com APIs nativas antes de qualquer outro script -->
+    <script src="/cordova-bridge.js"></script>
+    
+    <!-- Outras bibliotecas -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Script principal da aplicação -->
     <script type="module" src="/src/main.tsx"></script>
+    
     <script>
+      // Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js')
@@ -27,6 +39,31 @@
             });
         });
       }
+      
+      // Tenta solicitar permissão de localização assim que a página carregar
+      document.addEventListener('nativebridge:ready', function() {
+        console.log('Ponte nativa está pronta, verificando permissões...');
+        
+        if (window.CordovaBridge && window.CordovaBridge.Permissions) {
+          window.CordovaBridge.Permissions.checkLocationPermission()
+            .then(function(hasPermission) {
+              console.log('Status da permissão de localização:', hasPermission);
+              
+              if (!hasPermission) {
+                console.log('Solicitando permissão de localização...');
+                window.CordovaBridge.Permissions.requestLocation()
+                  .then(function() {
+                    console.log('Permissão de localização concedida!');
+                    localStorage.setItem('locationPermissionGranted', 'true');
+                  })
+                  .catch(function(err) {
+                    console.error('Permissão de localização negada:', err);
+                    localStorage.setItem('locationPermissionGranted', 'false');
+                  });
+              }
+            });
+        }
+      });
     </script>
   </body>
 </html> 

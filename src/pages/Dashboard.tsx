@@ -955,45 +955,92 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   
   // Botão para solicitar permissão de localização
   const solicitarPermissaoLocalizacao = () => {
-    if (!navigator.geolocation) {
-      alert('Seu navegador não suporta geolocalização!');
-      return;
-    }
-    
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const novaLoc = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-        
-        console.log('Permissão concedida, nova localização:', novaLoc);
-        localStorage.setItem('locationPermissionGranted', 'true');
-        setUserLocation(novaLoc);
-        
-        // Exibe mensagem de sucesso
-        mostrarNotificacao('Localização obtida com sucesso!', 'success');
-      },
-      (error) => {
-        console.error('Erro ao obter localização:', error);
-        localStorage.setItem('locationPermissionGranted', 'false');
-        
-        // Se a permissão foi negada, redireciona para a página de permissão
-        if (error.code === 1) { // PERMISSION_DENIED
-          if (confirm('É necessário permitir acesso à localização. Deseja ir para a página de permissão?')) {
-            window.location.href = '/location-permission.html';
+    // Verificamos se temos acesso à ponte de APIs nativas
+    if (window.CordovaBridge && window.CordovaBridge.Permissions) {
+      console.log('Solicitando permissão via ponte nativa');
+      
+      window.CordovaBridge.Permissions.requestLocation()
+        .then(() => {
+          console.log('Permissão concedida via ponte nativa');
+          localStorage.setItem('locationPermissionGranted', 'true');
+          
+          // Obtém a localização após permissão concedida
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const novaLoc = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy
+              };
+              
+              console.log('Permissão concedida, nova localização:', novaLoc);
+              setUserLocation(novaLoc);
+              
+              // Exibe mensagem de sucesso
+              mostrarNotificacao('Localização obtida com sucesso!', 'success');
+            },
+            (error) => {
+              console.error('Erro ao obter localização:', error);
+              mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+            }
+          );
+        })
+        .catch((error) => {
+          console.error('Erro ao solicitar permissão via ponte nativa:', error);
+          localStorage.setItem('locationPermissionGranted', 'false');
+          
+          // Se a permissão for negada, oferecemos abrir as configurações
+          if (confirm('É necessário permitir acesso à localização. Deseja abrir as configurações do aplicativo?')) {
+            window.CordovaBridge.Permissions.openAppSettings();
           }
-        } else {
-          mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+        });
+    } else {
+      // Fallback para API padrão do navegador
+      if (!navigator.geolocation) {
+        alert('Seu navegador não suporta geolocalização!');
+        return;
       }
-    );
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const novaLoc = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+          
+          console.log('Permissão concedida, nova localização:', novaLoc);
+          localStorage.setItem('locationPermissionGranted', 'true');
+          setUserLocation(novaLoc);
+          
+          // Exibe mensagem de sucesso
+          mostrarNotificacao('Localização obtida com sucesso!', 'success');
+        },
+        (error) => {
+          console.error('Erro ao obter localização:', error);
+          localStorage.setItem('locationPermissionGranted', 'false');
+          
+          // Se a permissão foi negada, redireciona para a página de permissão
+          if (error.code === 1) { // PERMISSION_DENIED
+            if (confirm('É necessário permitir acesso à localização. Deseja ir para a página de permissão?')) {
+              window.location.href = '/location-permission.html';
+            }
+          } else {
+            mostrarNotificacao('Erro ao obter localização. Verifique se o GPS está ativado.', 'error');
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
   };
 
   return (

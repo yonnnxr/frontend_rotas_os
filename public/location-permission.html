@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Permissão de Localização</title>
+    
+    <!-- Adiciona metatags para forçar permissões -->
+    <meta http-equiv="permissions-policy" content="geolocation=*, camera=*">
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -62,6 +66,18 @@
             border-radius: 5px;
             display: none;
         }
+        .button-secondary {
+            background-color: #757575;
+            margin-right: 10px;
+        }
+        .button-secondary:hover {
+            background-color: #616161;
+        }
+        .buttons-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -71,7 +87,10 @@
         
         <p>Isso permitirá mostrar as ordens de serviço mais próximas e calcular rotas otimizadas.</p>
         
-        <button id="requestPermission">Permitir Acesso à Localização</button>
+        <div class="buttons-container">
+            <button id="requestPermission" class="button-primary">Permitir Acesso à Localização</button>
+            <button id="openSettings" class="button-secondary" style="display: none;">Abrir Configurações</button>
+        </div>
         <p id="status"></p>
         
         <div id="locationInfo" class="location-info">
@@ -80,134 +99,176 @@
         </div>
     </div>
 
+    <!-- Carrega nosso script de ponte com APIs nativas -->
+    <script src="/cordova-bridge.js"></script>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const requestButton = document.getElementById('requestPermission');
+            const settingsButton = document.getElementById('openSettings');
             const statusText = document.getElementById('status');
             const locationInfo = document.getElementById('locationInfo');
             const coordinatesText = document.getElementById('coordinates');
             
-            // Função para solicitar permissão e obter localização
-            function requestLocationPermission() {
-                if (!navigator.geolocation) {
-                    statusText.textContent = 'Geolocalização não é suportada pelo seu navegador';
-                    statusText.className = 'error';
-                    return;
+            // Aguarda a ponte nativa estar pronta
+            document.addEventListener('nativebridge:ready', function() {
+                console.log('Ponte nativa pronta na página de permissão');
+                
+                // Função para solicitar permissão usando a ponte nativa ou a API do navegador
+                function requestLocationPermission() {
+                    statusText.textContent = 'Solicitando permissão...';
+                    
+                    // Tenta usar a ponte nativa primeiro
+                    if (window.CordovaBridge && window.CordovaBridge.Permissions) {
+                        window.CordovaBridge.Permissions.requestLocation()
+                            .then(function() {
+                                handlePermissionGranted();
+                            })
+                            .catch(function(error) {
+                                console.error('Erro ao solicitar permissão:', error);
+                                handlePermissionDenied(error);
+                            });
+                    } else {
+                        // Fallback para a API do navegador
+                        useBrowserGeolocation();
+                    }
                 }
                 
-                // Adiciona mensagem de carregamento
-                statusText.textContent = 'Solicitando permissão...';
+                // Função para usar a API de geolocalização do navegador
+                function useBrowserGeolocation() {
+                    if (!navigator.geolocation) {
+                        statusText.textContent = 'Geolocalização não é suportada pelo seu navegador';
+                        statusText.className = 'error';
+                        return;
+                    }
+                    
+                    navigator.geolocation.getCurrentPosition(
+                        function(position) {
+                            handlePermissionGranted(position);
+                        },
+                        function(error) {
+                            handlePermissionDenied(error);
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
+                        }
+                    );
+                }
                 
-                // Solicita a localização atual
-                navigator.geolocation.getCurrentPosition(
-                    // Sucesso
-                    function(position) {
-                        statusText.textContent = 'Permissão concedida com sucesso!';
-                        statusText.className = 'success';
-                        
-                        // Exibe as coordenadas
+                // Função para abrir as configurações do aplicativo
+                function openAppSettings() {
+                    if (window.CordovaBridge && window.CordovaBridge.Permissions) {
+                        window.CordovaBridge.Permissions.openAppSettings();
+                    } else {
+                        alert('Para permitir o acesso à localização, abra as configurações do seu dispositivo e conceda a permissão para este aplicativo.');
+                    }
+                }
+                
+                // Função para lidar com permissão concedida
+                function handlePermissionGranted(position) {
+                    statusText.textContent = 'Permissão concedida com sucesso!';
+                    statusText.className = 'success';
+                    localStorage.setItem('locationPermissionGranted', 'true');
+                    
+                    // Se temos a posição, exibimos as coordenadas
+                    if (position) {
                         const latitude = position.coords.latitude;
                         const longitude = position.coords.longitude;
                         coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
                         locationInfo.style.display = 'block';
-                        
-                        // Inicia o monitoramento contínuo da localização
-                        startWatchingLocation();
-                        
-                        // Armazena no localStorage que a permissão foi concedida
-                        localStorage.setItem('locationPermissionGranted', 'true');
-                        
-                        // Redireciona para a página principal após 3 segundos
-                        setTimeout(function() {
-                            window.location.href = '/';
-                        }, 3000);
-                    },
-                    // Erro
-                    function(error) {
+                    }
+                    
+                    // Oculta o botão de configurações e desabilita o botão principal
+                    settingsButton.style.display = 'none';
+                    requestButton.disabled = true;
+                    requestButton.textContent = 'Permissão Concedida';
+                    
+                    // Redireciona para a página principal após 3 segundos
+                    setTimeout(function() {
+                        window.location.href = '/';
+                    }, 3000);
+                }
+                
+                // Função para lidar com permissão negada
+                function handlePermissionDenied(error) {
+                    console.error('Permissão negada:', error);
+                    
+                    // Exibe mensagem de erro
+                    if (error && error.code) {
                         switch(error.code) {
-                            case error.PERMISSION_DENIED:
+                            case 1: // PERMISSION_DENIED
                                 statusText.textContent = 'Permissão negada pelo usuário.';
                                 break;
-                            case error.POSITION_UNAVAILABLE:
+                            case 2: // POSITION_UNAVAILABLE
                                 statusText.textContent = 'Informação de localização indisponível.';
                                 break;
-                            case error.TIMEOUT:
+                            case 3: // TIMEOUT
                                 statusText.textContent = 'Tempo esgotado ao obter localização.';
                                 break;
                             default:
-                                statusText.textContent = 'Erro desconhecido ao obter localização.';
+                                statusText.textContent = 'Erro ao obter permissão de localização.';
                         }
-                        statusText.className = 'error';
-                        
-                        // Armazena no localStorage que a permissão foi negada
-                        localStorage.setItem('locationPermissionGranted', 'false');
-                    },
-                    // Opções
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
+                    } else {
+                        statusText.textContent = 'Permissão de localização negada.';
                     }
-                );
-            }
-            
-            // Função para iniciar o monitoramento contínuo da localização
-            function startWatchingLocation() {
-                navigator.geolocation.watchPosition(
-                    function(position) {
-                        const latitude = position.coords.latitude;
-                        const longitude = position.coords.longitude;
-                        coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
-                    },
-                    function(error) {
-                        console.error('Erro ao monitorar localização:', error);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            }
-            
-            // Adiciona evento ao botão
-            requestButton.addEventListener('click', requestLocationPermission);
-            
-            // Verifica se o usuário já concedeu permissão anteriormente
-            if (localStorage.getItem('locationPermissionGranted') === 'true') {
-                statusText.textContent = 'Permissão já concedida anteriormente.';
-                statusText.className = 'success';
+                    
+                    statusText.className = 'error';
+                    localStorage.setItem('locationPermissionGranted', 'false');
+                    
+                    // Mostra o botão para abrir as configurações
+                    settingsButton.style.display = 'inline-block';
+                }
                 
-                // Tenta obter a localização atual novamente
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        const latitude = position.coords.latitude;
-                        const longitude = position.coords.longitude;
-                        coordinatesText.textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
-                        locationInfo.style.display = 'block';
-                        
-                        // Inicia o monitoramento contínuo
-                        startWatchingLocation();
+                // Adiciona evento aos botões
+                requestButton.addEventListener('click', requestLocationPermission);
+                settingsButton.addEventListener('click', openAppSettings);
+                
+                // Verifica permissão atual
+                if (window.CordovaBridge && window.CordovaBridge.Permissions) {
+                    window.CordovaBridge.Permissions.checkLocationPermission()
+                        .then(function(hasPermission) {
+                            if (hasPermission) {
+                                statusText.textContent = 'Permissão já concedida anteriormente.';
+                                statusText.className = 'success';
+                                requestButton.textContent = 'Continuar';
+                                
+                                // Redireciona para a página principal após 2 segundos
+                                setTimeout(function() {
+                                    window.location.href = '/';
+                                }, 2000);
+                            } else {
+                                // Solicita permissão automaticamente após 1 segundo
+                                setTimeout(requestLocationPermission, 1000);
+                            }
+                        });
+                } else {
+                    // Se a ponte não estiver disponível, verificamos o localStorage
+                    const permissionGranted = localStorage.getItem('locationPermissionGranted');
+                    if (permissionGranted === 'true') {
+                        statusText.textContent = 'Permissão já concedida anteriormente.';
+                        statusText.className = 'success';
+                        requestButton.textContent = 'Continuar';
                         
                         // Redireciona para a página principal após 2 segundos
                         setTimeout(function() {
                             window.location.href = '/';
                         }, 2000);
-                    },
-                    function(error) {
-                        console.error('Erro ao recuperar localização:', error);
-                        statusText.textContent = 'Erro ao recuperar localização. Por favor, tente novamente.';
-                        statusText.className = 'error';
+                    } else {
+                        // Solicita permissão automaticamente após 1 segundo
+                        setTimeout(requestLocationPermission, 1000);
                     }
-                );
-            }
-            
-            // Solicita automaticamente após 1 segundo
-            setTimeout(function() {
-                if (localStorage.getItem('locationPermissionGranted') !== 'true') {
-                    requestLocationPermission();
                 }
-            }, 1000);
+            });
+            
+            // Se a ponte nativa não estiver disponível após 3 segundos, usamos a API do navegador
+            setTimeout(function() {
+                if (!window.CordovaBridge) {
+                    console.log('Ponte nativa não disponível, usando API do navegador');
+                    document.dispatchEvent(new CustomEvent('nativebridge:ready'));
+                }
+            }, 3000);
         });
     </script>
 </body>
