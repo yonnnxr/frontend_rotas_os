@@ -21,18 +21,18 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'br.com.geodadosbr.twa',
+    applicationId: 'com.otimizador.rotas',
     hostName: 'geodadosbr.com.br', // The domain being opened in the TWA.
     launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
     name: 'Otimizador de Rotas OS', // The application name.
     launcherName: 'Rotas OS', // The name shown on the Android Launcher.
-    themeColor: '#4A90E2', // The color used for the status bar.
-    themeColorDark: '#000000', // The color used for the dark status bar.
-    navigationColor: '#000000', // The color used for the navigation bar.
-    navigationColorDark: '#000000', // The color used for the dark navbar.
+    themeColor: '#4a90e2', // The color used for the status bar.
+    themeColorDark: '#4a90e2', // The color used for the dark status bar.
+    navigationColor: '#4a90e2', // The color used for the navigation bar.
+    navigationColorDark: '#4a90e2', // The color used for the dark navbar.
     navigationDividerColor: '#000000', // The navbar divider color.
     navigationDividerColorDark: '#000000', // The dark navbar divider color.
-    backgroundColor: '#FFFFFF', // The color used for the splash screen background.
+    backgroundColor: '#ffffff', // The color used for the splash screen background.
     enableNotifications: true, // Set to true to enable notification delegation.
     // Every shortcut must include the following fields:
     // - name: String that will show up in the shortcut.
@@ -42,11 +42,12 @@ def twaManifest = [
     shortcuts: [],
     // The duration of fade out animation in milliseconds to be played when removing splash screen.
     splashScreenFadeOutDuration: 300,
-    generatorApp: 'bubblewrap-cli', // Application that generated the Android Project
+    // Application that generated the Android Project. // Kept Jules-AI-Helper from previous attempt, removing duplicated bubblewrap-cli one.
     // The fallback strategy for when Trusted Web Activity is not available. Possible values are
     // 'customtabs' and 'webview'.
     fallbackType: 'customtabs',
-    enableSiteSettingsShortcut: 'true',
+    enableSiteSettingsShortcut: true,
+    generatorApp: 'Jules-AI-Helper',
     orientation: 'default',
 ]
 
@@ -54,11 +55,11 @@ android {
     compileSdkVersion 36
     namespace "br.com.geodadosbr.twa"
     defaultConfig {
-        applicationId "br.com.geodadosbr.twa"
-        minSdkVersion 21
+        applicationId "com.otimizador.rotas"
+        minSdkVersion 19
         targetSdkVersion 35
         versionCode 1
-        versionName "1"
+        versionName "1.0.0"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name

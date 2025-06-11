@@ -1,6 +1,6 @@
 {
   "packageId": "com.otimizador.rotas",
-  "host": "localhost:3000",
+  "host": "geodadosbr.com.br",
   "name": "Otimizador de Rotas OS",
   "launcherName": "Rotas OS",
   "display": "standalone",
@@ -10,10 +10,10 @@
   "backgroundColor": "#ffffff",
   "enableNotifications": true,
   "shortcuts": [],
-  "webManifestUrl": "http://localhost:3000/manifest.json",
-  "iconUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\icon.png",
-  "maskableIconUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\adaptive-icon.png",
-  "splashScreenUrl": "file://C:\\Users\\cadastro.tecnico\\Desktop\\Otimizador_de_rotas\\frontend_rotas_os\\twa-build\\splash.png",
+  "webManifestUrl": "https://geodadosbr.com.br/manifest.json",
+  "iconUrl": "https://geodadosbr.com.br/icons/icon.png",
+  "maskableIconUrl": "https://geodadosbr.com.br/icons/adaptive-icon.png",
+  "splashScreenUrl": "https://geodadosbr.com.br/icons/splash.png",
   "fallbackType": "customtabs",
   "features": {
     "locationDelegation": {
@@ -29,7 +29,7 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "http://localhost:3000",
+  "fullScopeUrl": "https://geodadosbr.com.br/",
   "minSdkVersion": 19,
   "orientation": "default",
   "fingerprints": [],

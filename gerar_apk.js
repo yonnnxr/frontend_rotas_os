@@ -109,10 +109,11 @@ async function main() {
   
   // Verificar se o Bubblewrap está instalado
   try {
-    execSync('bubblewrap --version', { stdio: 'pipe' });
+    // Attempt to run the actual bubblewrap script directly with node
+    execSync('node /usr/local/lib/node_modules/@bubblewrap/cli/bin/bubblewrap.js --version', { stdio: 'pipe' });
   } catch (error) {
-    console.log(`${colors.yellow}Bubblewrap não encontrado. Instalando...${colors.reset}`);
-    runCommand('npm install -g @bubblewrap/cli');
+    console.log(`${colors.red}Actual bubblewrap script not executable via node. Output: ${error}${colors.reset}`);
+    process.exit(1); // Encerrar se o bubblewrap não estiver acessível
   }
   
   // Criar diretório e iniciar projeto
@@ -214,14 +215,16 @@ async function main() {
   // Primeiro, tentamos inicializar o projeto com o bubblewrap
   try {
     console.log(`${colors.blue}Inicializando projeto Bubblewrap...${colors.reset}`);
-    runCommand(`bubblewrap init --manifest="${config.webManifestUrl}" --directory="${twaDir}"`);
+    // Using the actual bubblewrap script directly with node
+    runCommand(`node /usr/local/lib/node_modules/@bubblewrap/cli/bin/bubblewrap.js init --manifest="${config.webManifestUrl}" --directory="${twaDir}"`);
   } catch (error) {
     console.log(`${colors.yellow}Não foi possível inicializar com manifest, tentando build direto...${colors.reset}`);
   }
   
   // Em seguida, construímos o APK
   try {
-    runCommand('bubblewrap build --skipPwaValidation');
+    // Using the actual bubblewrap script directly with node
+    runCommand('node /usr/local/lib/node_modules/@bubblewrap/cli/bin/bubblewrap.js build --skipPwaValidation');
   } catch (error) {
     console.error(`${colors.red}Falha ao gerar APK. Tentando uma abordagem alternativa...${colors.reset}`);
     
@@ -246,7 +249,8 @@ async function main() {
     
     // Tenta novamente com o comando mais simples
     console.log(`${colors.blue}Tentando construir novamente com opções simplificadas...${colors.reset}`);
-    runCommand('bubblewrap build --skipPwaValidation');
+    // Using the actual bubblewrap script directly with node
+    runCommand('node /usr/local/lib/node_modules/@bubblewrap/cli/bin/bubblewrap.js build --skipPwaValidation');
   }
   
   // Verificar se o APK foi gerado
